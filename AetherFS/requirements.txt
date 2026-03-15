@@ -1,0 +1,22 @@
+# Core Framework
+fastapi[standard]
+python-dotenv
+
+# Database & ORM
+sqlmodel
+alembic
+asyncpg
+psycopg2-binary
+
+# Messaging (Kafka)
+aiokafka
+
+# Cache & Online Store
+redis
+
+# Data Processing
+pyspark
+pandas
+
+# Utils
+python-multipart
