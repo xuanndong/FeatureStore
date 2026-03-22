@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from enum import Enum
 
-# Third-party Libraries
+# Third party Libraries
 from sqlmodel import SQLModel, Field, Relationship, Column, String,Text, Float
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
@@ -51,6 +51,11 @@ class SourceFormat(str, Enum):
     JSON = "JSON"
 
 
+class ReadPolicies(str, Enum):
+    FULL_READ = "FULL_READ"
+    NEW_VALUES = "NEW_VALUES"
+
+
 class DataSource(SQLModel, table=True):
     """
     Data Source Table
@@ -61,6 +66,7 @@ class DataSource(SQLModel, table=True):
     name: str = Field(sa_column=Column(String(100), nullable=False, index=True))
     source_type: SourceType = Field(sa_column=Column(String(20))) # BATCH, STREAM
     source_format: SourceFormat = Field(sa_column=Column(String(20))) # CSV, PARQUET, AVRO, JSON
+    connection_options: dict | None = Field(default=None, sa_column=Column(JSONB))
     location_uri: str = Field(sa_column=Column(String(255), nullable=False))
     timestamp_field: str = Field(sa_column=Column(String(50), nullable=False))
     updated_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float, onupdate=currentTimeUTC))
