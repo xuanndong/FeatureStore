@@ -15,8 +15,12 @@ aiokafka
 redis
 
 # Data Processing
-pyspark
+ray
 pandas
+pyarrow
+fsspec
+s3fs
 
 # Utils
 python-multipart
+
