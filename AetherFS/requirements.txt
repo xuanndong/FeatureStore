@@ -20,6 +20,7 @@ pandas
 pyarrow
 fsspec
 s3fs
+duckdb
 
 # Utils
 python-multipart

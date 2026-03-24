@@ -16,6 +16,9 @@ class FsspecClient:
     Unified communication layer with storage systems (MinIO, S3, Local)
     """
     def __init__(self, uri: str, connection_options: dict = None):
+        """
+        Initialize
+        """
         self.uri = uri
         self.parsed_uri = urlparse(uri)
         self.scheme = self.parsed_uri.scheme or "file"

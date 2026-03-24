@@ -1,12 +1,14 @@
 # Standar Libraries
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
-from enum import Enum
 
 # Third party Libraries
 from sqlmodel import SQLModel, Field, Relationship, Column, String,Text, Float
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
+
+# User define Libraries
+from common.constants import SourceFormat, SourceType, TransformationType, FeatureGroupStatus
 
 
 class FeatureViewMember(SQLModel, table=True):
@@ -39,23 +41,6 @@ class Entity(SQLModel, table=True):
     feature_groups: list["FeatureGroup"] = Relationship(back_populates="entity")
 
 
-class SourceType(str, Enum):
-    BATCH = "BATCH"
-    STREAM = "STREAM"
-
-
-class SourceFormat(str, Enum):
-    CSV = "CSV"
-    PARQUET = "PARQUET"
-    AVRO = "AVRO"
-    JSON = "JSON"
-
-
-class ReadPolicies(str, Enum):
-    FULL_READ = "FULL_READ"
-    NEW_VALUES = "NEW_VALUES"
-
-
 class DataSource(SQLModel, table=True):
     """
     Data Source Table
@@ -76,12 +61,6 @@ class DataSource(SQLModel, table=True):
     feature_groups: list["FeatureGroup"] = Relationship(back_populates="source")
 
 
-class TransformationType(str, Enum):
-    SQL = "SQL"
-    PYTHON_UDF = "PYTHON_UDF"
-    AGGREGATION = "AGGREGATION"
-
-
 class Transformation(SQLModel, table=True):
     """
     Transformation Feature Table
@@ -98,12 +77,6 @@ class Transformation(SQLModel, table=True):
 
     # Relationships
     feature_groups: list["FeatureGroup"] = Relationship(back_populates="transformation")
-
-
-class FeatureGroupStatus(str, Enum):
-    ACTIVE = "ACTIVE"
-    INACTIVE = "INACTIVE"
-    DEPRECATED = "DEPRECATED"
 
 
 class FeatureGroup(SQLModel, table=True):
