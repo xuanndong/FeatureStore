@@ -287,8 +287,11 @@ class RayBased:
         input_storage_client = FsspecClient(location_uri, connection_options)
         input_fs = input_storage_client.get_raw_fs()
 
-        scheme_prefix = f"{input_storage_client.scheme}://"
-        sample_paths = [path.replace(scheme_prefix, "") for path in dataset[:limit]]
+        scheme_prefix = f"{input_storage_client.scheme}://" if input_storage_client.scheme else ""
+        if scheme_prefix:
+            sample_paths = [path.replace(scheme_prefix, "") for path in dataset[:limit]]
+        else:
+            sample_paths = dataset[:limit]
 
         fmt = str(source_format).strip().upper()
         
@@ -339,8 +342,11 @@ class RayBased:
         input_storage_client = FsspecClient(location_uri, connection_options)
         input_fs = input_storage_client.get_raw_fs()
 
-        scheme_prefix = f"{input_storage_client.scheme}://"
-        clean_paths = [path.replace(scheme_prefix, "") for path in dataset]
+        scheme_prefix = f"{input_storage_client.scheme}://" if input_storage_client.scheme else ""
+        if scheme_prefix:
+            clean_paths = [path.replace(scheme_prefix, "") for path in dataset]
+        else:
+            clean_paths = dataset
 
         fmt = str(source_format).strip().upper()
 

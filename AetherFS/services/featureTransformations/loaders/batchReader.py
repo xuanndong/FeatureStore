@@ -65,8 +65,8 @@ class BatchReader:
             raw_fs = storage.get_raw_fs()
 
             # Parse prefix
-            scheme_prefix = f"{storage.scheme}://"
-            clean_files = [path.replace(scheme_prefix, "") for path in valid_files]
+            scheme_prefix = f"{storage.scheme}://" if storage.scheme else ""
+            clean_files = [path.replace(scheme_prefix, "") for path in valid_files] if scheme_prefix else valid_files
 
             if is_multi_file:
                 datasets_dict = {}
