@@ -33,7 +33,7 @@ class BatchReader:
         connection_options: dict | None = None, 
         policy: ReadPolicies = ReadPolicies.FULL_READ,
         partitioning: str | None = None,
-        multi_table: bool = False
+        is_multi_file: bool = False
     ) -> ds.Dataset | list[str] | dict[str, ds.Dataset] | None:
         """
         Load data with optional partition tracking
@@ -68,7 +68,7 @@ class BatchReader:
             scheme_prefix = f"{storage.scheme}://"
             clean_files = [path.replace(scheme_prefix, "") for path in valid_files]
 
-            if multi_table:
+            if is_multi_file:
                 datasets_dict = {}
                 for file_path in clean_files:
                     table_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -153,10 +153,10 @@ class BatchReader:
             }
         except PermissionError as e:
             logger.error("Access denied: %s", e)
-            raise PermissionError("Authentication failed or access denied: %s", e)
+            raise PermissionError(f"Authentication failed or access denied: {str(e)}")
         except FileNotFoundError as e:
             logger.error("File disappeared during stats calculation: %s", e)
-            raise FileNotFoundError("File not found: %s", e)
+            raise FileNotFoundError(f"File not found: {str(e)}")
         except Exception as e:
             logger.error("System error retrieving storage capacity: %s", e)
-            raise RuntimeError("Failed to connect to the storage system. Details: %s", e)
+            raise RuntimeError(f"Failed to connect to the storage system. Details: {str(e)}")

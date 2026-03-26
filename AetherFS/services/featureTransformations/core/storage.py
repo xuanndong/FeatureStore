@@ -44,7 +44,7 @@ class FsspecClient:
         elif self.scheme == "file":
             return fsspec.filesystem("file")
         else:
-            raise ValueError("The system does not yet support the storage protocol: %s", self.scheme)
+            raise ValueError(f"The system does not yet support the storage protocol: {str(self.scheme)}")
 
     def get_raw_fs(self):
         """

@@ -1,6 +1,12 @@
 # Standard Libraries
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+# User define Libraries
+from services.featureTransformations.core.system import SystemUtils
+
+
+systemProfile = SystemUtils.get_profile()
 
 
 class SourceType(str, Enum):
@@ -13,6 +19,11 @@ class SourceFormat(str, Enum):
     PARQUET = "PARQUET"
     AVRO = "AVRO"
     JSON = "JSON"
+    IMAGE = "IMAGE"
+    TEXT = "TEXT"
+    AUDIO = "AUDIO"
+    VIDEO = "VIDEO"
+    BINARY = "BINARY"
 
 
 class ReadPolicies(str, Enum):
@@ -38,10 +49,31 @@ class VirtualTable(str, Enum):
 
 @dataclass
 class DuckDBConfig:
-    memory_limit: str = "4GB"
-    threads: int = 4
+    MEMORY_LIMIT: str = field(default=f"{int((systemProfile.total_ram_bytes * 0.5) / (1024 ** 3))}GB")
+    THREADS: int = field(default=max(1, int(systemProfile.logical_cpus * 0.7)))
 
 
 class PartitionFlavor(str, Enum):
     HIVE = "hive"
     DIRECTORY = "directory"
+
+
+@dataclass
+class RayConfig:
+    NUM_CPUS: int = field(default=max(1, int(systemProfile.logical_cpus * 0.8)))
+    NUM_GPUS: int = field(default=systemProfile.physical_gpus)
+    MEMORY_BYTES: int = field(default=int(systemProfile.total_ram_bytes * 0.3))
+
+    RUNTIME_ENV_KEY: str = "runtime_env"
+    PIP_KEY: str = "pip"
+
+
+class VirtualDataset(str, Enum):
+    DEFAULT_STRUCTURED = "STRUCTURED"
+    DEFAULT_UNSTRUCTURED = "UNSTRUCTURED"
+
+
+class UDFConstants:
+    DEFAULT_CLASS_NAME = "UDFProcessor"
+    REQUIRED_METHOD = "__call__"
+    REQUIRED_INIT_PARAM = "dataset_name"

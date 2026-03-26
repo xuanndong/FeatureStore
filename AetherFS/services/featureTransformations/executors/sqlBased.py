@@ -21,8 +21,8 @@ class SQLBased:
         """
         Initialize
         """
-        self.memory_limit = config.memory_limit
-        self.threads = config.threads
+        self.memory_limit = config.MEMORY_LIMIT
+        self.threads = config.THREADS
 
         # SQL Reserved Keywords
         self.forbidden_keywords = {
@@ -46,7 +46,7 @@ class SQLBased:
 
         violations = self.forbidden_keywords.intersection(tokens)
         if violations:
-            raise PermissionError("Access Denied: The following SQL commands are restricted: %s", violations)
+            raise PermissionError(f"Access Denied: The following SQL commands are restricted: {str(violations)}")
 
     @contextmanager
     def execute(
@@ -79,11 +79,11 @@ class SQLBased:
 
             yield con.sql(sql_query).arrow()
         except duckdb.ParserException as e:
-            raise ValueError("SQL Syntax Error: %s", e)
+            raise ValueError(f"SQL Syntax Error: {str(e)}")
         except duckdb.BinderException as e:
-            raise ValueError("Undefined table or column: '%s'. Details: %s", table_name, e)
+            raise ValueError(f"Undefined table or column: '{str(table_name)}'. Details: {str(e)}")
         except Exception as e:
-            raise RuntimeError("Failed to execute SQL query: %s", e)
+            raise RuntimeError(f"Failed to execute SQL query: {str(e)}")
         finally:
             for table in registered_tables:
                 try:

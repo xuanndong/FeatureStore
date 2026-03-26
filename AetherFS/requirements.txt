@@ -1,27 +1,19 @@
-# Core Framework
+# --- Core API Framework ---
 fastapi[standard]
 python-dotenv
+python-multipart
 
-# Database & ORM
+# --- Database & ORM (Metadata & Tracking) ---
 sqlmodel
 alembic
 asyncpg
 psycopg2-binary
 
-# Messaging (Kafka)
+# --- Messaging & Cache ---
 aiokafka
-
-# Cache & Online Store
 redis
 
-# Data Processing
-ray
-pandas
-pyarrow
+# --- Storage Connectors & Query Engine ---
 fsspec
 s3fs
 duckdb
-
-# Utils
-python-multipart
-
