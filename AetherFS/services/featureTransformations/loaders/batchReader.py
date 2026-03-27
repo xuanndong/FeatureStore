@@ -4,7 +4,7 @@ import os
 
 # User Defined Libraries
 from services.featureTransformations.core.storage import FsspecClient
-from common.constants import SourceFormat, ReadPolicies, VirtualTable
+from common.constants import SourceFormat, ReadPolicies, VirtualTable, DatasetConfig
 
 # Third party Libraries
 from pyarrow import dataset as ds
@@ -71,7 +71,7 @@ class BatchReader:
             if is_multi_file:
                 datasets_dict = {}
                 for file_path in clean_files:
-                    table_name = os.path.splitext(os.path.basename(file_path))[0]
+                    table_name = os.path.splitext(os.path.basename(file_path))[DatasetConfig.HEAD_INDEX]
 
                     dataset_kwargs = {
                         "source": [file_path],

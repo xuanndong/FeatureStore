@@ -2,6 +2,7 @@
 fastapi[standard]
 python-dotenv
 python-multipart
+virtualenv
 
 # --- Database & ORM (Metadata & Tracking) ---
 sqlmodel

@@ -77,3 +77,8 @@ class UDFConstants:
     DEFAULT_CLASS_NAME = "UDFProcessor"
     REQUIRED_METHOD = "__call__"
     REQUIRED_INIT_PARAM = "dataset_name"
+
+
+class DatasetConfig:
+    SINGLE_FILE_COUNT = 1
+    HEAD_INDEX = 0
