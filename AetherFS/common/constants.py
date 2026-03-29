@@ -47,6 +47,14 @@ class VirtualTable(str, Enum):
     SOURCE_DATA = "source_data"
 
 
+class SyncStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELED = "CANCELED"
+
+
 @dataclass
 class DuckDBConfig:
     MEMORY_LIMIT: str = field(default=f"{int((systemProfile.total_ram_bytes * 0.5) / (1024 ** 3))}GB")
@@ -82,3 +90,4 @@ class UDFConstants:
 class DatasetConfig:
     SINGLE_FILE_COUNT = 1
     HEAD_INDEX = 0
+    NULL_VALUE = "null"

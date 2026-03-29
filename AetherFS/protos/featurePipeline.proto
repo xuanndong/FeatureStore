@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package featurePipeline;
+
+
+// Map Enums to Python constants
+enum SourceFormat {
+    UNKNOWN_FORMAT = 0;
+    CSV = 1;
+    PARQUET = 2;
+    AVRO = 3;
+    JSON = 4;
+    IMAGE = 5;
+    TEXT = 6;
+    AUDIO = 7;
+    VIDEO = 8;
+    BINARY = 9;
+}
+
+enum TransformationType {
+    UNKNOWN_TYPE = 0;
+    SQL = 1;
+    PYTHON_UDF = 2;
+    AGGREGATION = 3;
+}
+
+enum ReadPolicy {
+    FULL_READ = 0;
+    NEW_VALUES = 1;
+}
+
+
+// Preview Flow Request & Response
+message AggregationConfig {
+    repeated string entity_keys = 1;
+    string time_column = 2;
+    string features_config_json = 3; 
+    repeated string windows = 4;
+}
+
+message PreviewRequest {
+    string location_uri = 1;
+    SourceFormat source_format = 2;
+    TransformationType transform_type = 3;
+    string transform_definition = 4;
+
+    // Configuration
+    string connection_options_json = 5;
+    int32 limit = 6;
+
+    // UDF Specific
+    repeated string requirements = 7;
+    repeated string target_datasets = 8;
+
+    // Aggregation Specific
+    AggregationConfig aggregation_config = 9;
+}
+
+message PreviewResponse {
+    // Key: dataset_name, Value: JSON string list of records
+    map<string, string> results_json = 1;
+}
+
+
+// Run Flow Request & Response
+message RunRequest {
+    string project_id = 1;
+    string location_uri = 2;
+    string output_uri = 3;
+    SourceFormat source_format = 4;
+    TransformationType transform_type = 5;
+    string transform_definition = 6;
+
+    // Configuration
+    string connection_options_json = 7;
+    double last_updated = 8; // Unix timestamp
+    ReadPolicy read_policy = 9;
+
+    // UDF Specific
+    repeated string requirements = 10;
+
+    // Select Target Dataset
+    repeated string target_datasets = 11;
+
+    // Aggregation Specific
+    AggregationConfig aggregation_config = 12;
+}
+
+message RunResponse {
+    // Key: dataset_name, Value: JSON string of metadata/uris
+    map<string, string> saved_metadata_json = 1;
+}
+
+
+// Service Interface
+service PipelineService {
+    // Quick Formula Test & UI Data Preview
+    rpc PreviewFeatureGroup (PreviewRequest) returns (PreviewResponse);
+
+    // Persists files to Feature Storage and pushes data to Redis
+    rpc RunBatchPipeline (RunRequest) returns (RunResponse);
+}

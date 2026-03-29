@@ -1,6 +1,7 @@
 # Standar Libraries
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
+from typing import Any
 
 # Third party Libraries
 from sqlmodel import SQLModel, Field, Relationship, Column, String,Text, Float
@@ -9,6 +10,10 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 # User define Libraries
 from common.constants import SourceFormat, SourceType, TransformationType, FeatureGroupStatus
+
+
+def currentTimeUTC():
+    return datetime.now(timezone.utc).timestamp()
 
 
 class FeatureViewMember(SQLModel, table=True):
@@ -20,9 +25,6 @@ class FeatureViewMember(SQLModel, table=True):
     view_id: UUID = Field(foreign_key="feature_views.id", primary_key=True, ondelete="CASCADE")
     feature_id: UUID = Field(foreign_key="features.id", primary_key=True, ondelete="CASCADE", index=True)
 
-
-def currentTimeUTC():
-    return datetime.now(timezone.utc).timestamp()
 
 class Entity(SQLModel, table=True):
     """
@@ -53,7 +55,9 @@ class DataSource(SQLModel, table=True):
     source_format: SourceFormat = Field(sa_column=Column(String(20))) # CSV, PARQUET, AVRO, JSON
     connection_options: dict | None = Field(default=None, sa_column=Column(JSONB))
     location_uri: str = Field(sa_column=Column(String(255), nullable=False))
-    timestamp_field: str = Field(sa_column=Column(String(50), nullable=False))
+
+    timestamp_field: str | None = Field(default=None, sa_column=Column(String(50)))
+
     updated_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float, onupdate=currentTimeUTC))
     created_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float))
 
@@ -88,9 +92,15 @@ class FeatureGroup(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(sa_column=Column(String(100), unique=True, nullable=False))
     status: FeatureGroupStatus = Field(sa_column=Column(String(20), default="ACTIVE")) # ACTIVE, INACTIVE, DEPRECATED
+
+    offline_uri: str | None = Field(default=None, sa_column=Column(String(255)))
+    last_sync_status: str = Field(default="PENDING", sa_column=Column(String(20)))
+    last_synced_at: float = Field(default=0.0, sa_column=Column(Float))
+
     entity_id: UUID = Field(foreign_key="entities.id", ondelete="CASCADE", index=True)
     source_id: UUID = Field(foreign_key="data_sources.id", ondelete="CASCADE", index=True)
     transformation_id: UUID | None = Field(foreign_key="transformations.id", default=None, index=True)
+
     updated_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float, onupdate=currentTimeUTC))
     created_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float))
 
@@ -106,10 +116,7 @@ class Feature(SQLModel, table=True):
     Feature Table
     """
     __tablename__ = "features"
-
-    __table_args__ = (
-        UniqueConstraint("group_id", "name", "version", name="unique_feature_version"),
-    )
+    __table_args__ = ( UniqueConstraint("group_id", "name", "version", name="unique_feature_version") )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     group_id: UUID = Field(foreign_key="feature_groups.id", ondelete="CASCADE", index=True)

@@ -33,18 +33,20 @@ class FsspecClient:
         """
         if self.scheme in ["s3", "s3a"]:
             # Configuration for MinIO/AWS S3
+            client_kwargs = {}
+            if endpoint := self.opts.get('endpoint_url'):
+                client_kwargs['endpoint_url'] = endpoint
+
             return fsspec.filesystem(
                 "s3",
                 key=self.opts.get("access_key"),
                 secret=self.opts.get("secret_key"),
-
-                # Endpoint for MinIO
-                client_kwargs={'endpoint_url': self.opts.get('endpoint_url')}
+                client_kwargs=client_kwargs if client_kwargs else None
             )
         elif self.scheme == "file":
             return fsspec.filesystem("file")
-        else:
-            raise ValueError(f"The system does not yet support the storage protocol: {str(self.scheme)}")
+        
+        raise ValueError(f"Unsupported storage protocol: {self.scheme}")
 
     def get_raw_fs(self):
         """

@@ -18,3 +18,8 @@ redis
 fsspec
 s3fs
 duckdb
+
+# --- Protocol ---
+grpcio
+grpcio-tools
+grpcio-reflection

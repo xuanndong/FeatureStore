@@ -53,7 +53,8 @@ class SQLBased:
         self,
         dataset: ds.Dataset | pa.Table | dict[str, ds.Dataset],
         sql_query: str,
-        table_name: VirtualTable = VirtualTable.SOURCE_DATA
+        table_name: VirtualTable = VirtualTable.SOURCE_DATA,
+        limit: int | None = None
     ) -> pa.Table:
         """
         Execute sql query
@@ -69,6 +70,7 @@ class SQLBased:
             con.execute(f"PRAGMA memory_limit='{self.memory_limit}'")
             con.execute(f"PRAGMA threads={self.threads}")
 
+            # Register datasets
             if isinstance(dataset, dict):
                 for name, data in dataset.items():
                     con.register(name, data)
@@ -77,7 +79,11 @@ class SQLBased:
                 con.register(table_name, dataset)
                 registered_tables.append(table_name)
 
-            yield con.sql(sql_query).arrow()
+            final_query = sql_query
+            if limit:
+                final_query = f"SELECT * FROM ({sql_query}) LIMIT {limit}"
+
+            yield con.sql(final_query).arrow()
         except duckdb.ParserException as e:
             raise ValueError(f"SQL Syntax Error: {str(e)}")
         except duckdb.BinderException as e:
