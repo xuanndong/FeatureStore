@@ -1,15 +1,14 @@
 # Standar Libraries
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
-from typing import Any
 
 # Third party Libraries
-from sqlmodel import SQLModel, Field, Relationship, Column, String,Text, Float
+from sqlmodel import SQLModel, Field, Relationship, Column, String,Text, Float, Boolean
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 
 # User define Libraries
-from common.constants import SourceFormat, SourceType, TransformationType, FeatureGroupStatus
+from common.constants import SourceFormat, SourceType, TransformationType, FeatureGroupStatus, Materialization
 
 
 def currentTimeUTC():
@@ -56,8 +55,6 @@ class DataSource(SQLModel, table=True):
     connection_options: dict | None = Field(default=None, sa_column=Column(JSONB))
     location_uri: str = Field(sa_column=Column(String(255), nullable=False))
 
-    timestamp_field: str | None = Field(default=None, sa_column=Column(String(50)))
-
     updated_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float, onupdate=currentTimeUTC))
     created_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float))
 
@@ -91,11 +88,15 @@ class FeatureGroup(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(sa_column=Column(String(100), unique=True, nullable=False))
-    status: FeatureGroupStatus = Field(sa_column=Column(String(20), default="ACTIVE")) # ACTIVE, INACTIVE, DEPRECATED
+    status: FeatureGroupStatus = Field(sa_column=Column(String(20), default=FeatureGroupStatus.ACTIVE)) # ACTIVE, INACTIVE, DEPRECATED
 
     offline_uri: str | None = Field(default=None, sa_column=Column(String(255)))
-    last_sync_status: str = Field(default="PENDING", sa_column=Column(String(20)))
-    last_synced_at: float = Field(default=0.0, sa_column=Column(Float))
+    last_run_status: Materialization = Field(default=Materialization.PENDING, sa_column=Column(String(20)))
+    last_run_at: float = Field(default=0.0, sa_column=Column(Float))
+
+    is_scheduled: bool = Field(default=False, sa_column=Column(Boolean, default=False))
+    cron_expression: str | None = Field(default=None, sa_column=Column(String(100)))
+    next_run_at: float | None = Field(default=None, sa_column=Column(Float))
 
     entity_id: UUID = Field(foreign_key="entities.id", ondelete="CASCADE", index=True)
     source_id: UUID = Field(foreign_key="data_sources.id", ondelete="CASCADE", index=True)
@@ -116,14 +117,15 @@ class Feature(SQLModel, table=True):
     Feature Table
     """
     __tablename__ = "features"
-    __table_args__ = ( UniqueConstraint("group_id", "name", "version", name="unique_feature_version") )
+
+    # Access restriction: Duplicate feature names are not allowed within the same FeatureGroup
+    __table_args__ = ( UniqueConstraint("group_id", "name", name="unique_feature_in_group"), )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     group_id: UUID = Field(foreign_key="feature_groups.id", ondelete="CASCADE", index=True)
     name: str = Field(sa_column=Column(String(100), nullable=False))
     data_type: str = Field(sa_column=Column(String(50), nullable=False))
-    version: int = Field(default=1)
-    is_nullable: bool = Field(default=True)
+
     description: str | None = Field(default=None, sa_column=Column(Text))
 
     # Relationships

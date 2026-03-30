@@ -10,7 +10,6 @@ from services.featureTransformations.executors.batchAggregations import Aggregat
 from common.constants import TransformationType, ReadPolicies, SourceFormat, VirtualTable
 from services.featureTransformations.materializers.offlineStore import OfflineStore
 from services.featureTransformations.materializers.onlineStore import OnlineStore
-import pyarrow as pa
 
 
 # Logs

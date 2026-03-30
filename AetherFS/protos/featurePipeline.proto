@@ -87,8 +87,26 @@ message RunRequest {
 }
 
 message RunResponse {
-    // Key: dataset_name, Value: JSON string of metadata/uris
-    map<string, string> saved_metadata_json = 1;
+    string job_id = 1;
+    string status = 2;
+    string message = 3;
+}
+
+
+// Schedule Flow
+message ScheduleRequest {
+    RunRequest run_config = 1;
+
+    // config
+    string cron_expression = 2; // Ex: "0 12 * * *"
+    bool is_active = 3; // pause/resume
+}
+
+message ScheduleResponse {
+    string job_id = 1; // feature_group_id
+    string status = 2;
+    double next_run_at = 3; // Unix timestamp
+    string message = 4; // Information
 }
 
 
@@ -99,4 +117,7 @@ service PipelineService {
 
     // Persists files to Feature Storage and pushes data to Redis
     rpc RunBatchPipeline (RunRequest) returns (RunResponse);
+
+    // Schedule automation
+    rpc ScheduleBatchPipeline (ScheduleRequest) returns (ScheduleResponse);
 }

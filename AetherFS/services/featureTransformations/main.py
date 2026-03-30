@@ -4,6 +4,8 @@ import json
 import concurrent.futures
 import sys
 import os
+import uuid
+from datetime import datetime
 
 # Path processing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -12,6 +14,10 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.
 # Third party Libraries
 import grpc
 from grpc_reflection.v1alpha import reflection
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 
 # Generated Proto files
 from common.grpc import featurePipeline_pb2 as pb2
@@ -29,6 +35,20 @@ logger = logging.getLogger(__name__)
 class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
     def __init__(self):
         self.runner = BatchPipelineRunner()
+
+        executors = {
+            'default': ThreadPoolExecutor(max_workers=2) 
+        }
+
+        job_defaults = {
+            'coalesce': True,
+            'max_instances': 1
+        }
+
+        # Schedule
+        self.scheduler = BackgroundScheduler(executors=executors, job_defaults=job_defaults)
+        self.scheduler.start()
+        logger.info("Background Scheduler initialized with max_workers=2. Ready for heavy loads!")
 
     def _parse_json_safe(self, json_str: str):
         if not json_str:
@@ -81,6 +101,37 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
 
         return entity_keys, time_col, feat_cfg, windows
 
+    def _build_run_kwargs(self, run_req):
+        conn_opts = self._parse_json_safe(run_req.connection_options_json)
+        entity_keys, time_col, feat_cfg, windows = self._extract_agg_config(run_req)
+
+        return {
+            "project_id": run_req.project_id,
+            "location_uri": run_req.location_uri,
+            "output_uri": run_req.output_uri,
+            "source_format": self._map_source_format(run_req.source_format),
+            "transform_type": self._map_transform_type(run_req.transform_type),
+            "transform_definition": run_req.transform_definition,
+            "connection_options": conn_opts,
+            "last_updated": run_req.last_updated if run_req.last_updated > 0 else None,
+            "read_policy": self._map_read_policy(run_req.read_policy),
+            "requirements": list(run_req.requirements),
+            "target_datasets": list(run_req.target_datasets),
+            "entity_keys": entity_keys,
+            "time_column": time_col,
+            "features_config": feat_cfg,
+            "windows": windows
+        }
+
+    def _background_pipeline_task(self, kwargs, job_id):
+        try:
+            # TODO: Update database thanh running
+            saved_metadata = self.runner.run(**kwargs)
+            # TODO: Cap nhat database thanh COMplete
+        except Exception as e:
+            logger.error(f"Data processing error for {job_id}: {str(e)}")
+            # TODO: Cap nhat database
+
     def PreviewFeatureGroup(self, request, context):
         logger.info(f"Received Preview request for URI: {request.location_uri}")
         try:
@@ -116,40 +167,66 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             context.abort(grpc.StatusCode.INTERNAL, str(e))
 
     def RunBatchPipeline(self, request, context):
-        logger.info(f"Received Run request for URI: {request.location_uri}")
+        logger.info(f"Received Run request for Feature Group: {request.feature_group_id}")
         try:
-            conn_opts = self._parse_json_safe(request.connection_options_json)
+            kwargs = self._build_run_kwargs(request)
 
-            # Extract Aggregation Config from nested message
-            entity_keys, time_col, feat_cfg, windows = self._extract_agg_config(request)
+            # Generate key
+            job_id = f"run_once_{uuid.uuid4().hex[:8]}"
 
-            saved_metadata = self.runner.run(
-                project_id=request.project_id,
-                location_uri=request.location_uri,
-                output_uri=request.output_uri,
-                source_format=self._map_source_format(request.source_format),
-                transform_type=self._map_transform_type(request.transform_type),
-                transform_definition=request.transform_definition,
-                connection_options=conn_opts,
-                last_updated=request.last_updated if request.last_updated > 0 else None,
-                read_policy=self._map_read_policy(request.read_policy),
-                # For UDF Structure
-                requirements=list(request.requirements),
-                target_datasets=list(request.target_datasets),
-                # For Aggregation
-                entity_keys=entity_keys,
-                time_column=time_col,
-                features_config=feat_cfg,
-                windows=windows
+            self.scheduler.add_job(
+                func=self._background_pipeline_task,
+                trigger=DateTrigger(run_date=datetime.now()), 
+                args=[kwargs, job_id],
+                id=job_id
             )
 
-            response = pb2.RunResponse()
-            for ds_name, metadata_dict in saved_metadata.items():
-                response.saved_metadata_json[ds_name] = json.dumps(metadata_dict)
-
-            return response
+            return pb2.RunResponse(
+                job_id=job_id,
+                status="SUBMITTED",
+                message="Process is running in the background"
+            )
         except Exception as e:
-            logger.error(f"Run Pipeline Failed: {str(e)}", exc_info=True)
+            logger.error(f"Run Pipeline Submission Failed: {str(e)}", exc_info=True)
+            context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+    def ScheduleBatchPipeline(self, request, context):
+        logger.info(f"Received Schedule request. Cron: {request.cron_expression}")
+
+        try:
+            job_id = f"cron_{uuid.uuid4().hex[:8]}"
+
+            if not request.is_active:
+                return pb2.ScheduleResponse(
+                    job_id="unknown",
+                    status="PAUSED",
+                    next_run_at="0",
+                    message="Pause command received"
+                )
+
+            # Schedule
+            kwargs = self._build_run_kwargs(request.run_config)
+            trigger = CronTrigger.from_crontab(request.cron_expression)
+
+            job = self.scheduler.add_job(
+                func=self._background_pipeline_task,
+                trigger=trigger,
+                args=[kwargs, job_id],
+                id=job_id,
+                replace_existing=True
+            )
+
+            return pb2.ScheduleResponse(
+                job_id=job.id,
+                status="SCHEDULED",
+                next_run_at=job.next_run_time.timestamp() if job.next_run_time else 0.0,
+                message=f"Schedule set successfully: {request.cron_expression}"
+            )
+        except ValueError as ve:
+            logger.error(f"CRON or JSON parameter error: {str(ve)}")
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"Parameter error: {str(ve)}")
+        except Exception as e:
+            logger.error(f"Schedule Pipeline Failed: {str(e)}", exc_info=True)
             context.abort(grpc.StatusCode.INTERNAL, str(e))
 
 def serve():

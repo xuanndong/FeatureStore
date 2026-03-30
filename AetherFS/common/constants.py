@@ -47,7 +47,7 @@ class VirtualTable(str, Enum):
     SOURCE_DATA = "source_data"
 
 
-class SyncStatus(str, Enum):
+class Materialization(str, Enum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
