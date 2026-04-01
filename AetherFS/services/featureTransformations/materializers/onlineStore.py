@@ -2,6 +2,7 @@
 import json
 import logging
 import base64
+import datetime
 from typing import Any
 
 # Third party Libraries
@@ -36,6 +37,9 @@ class OnlineStore:
         if isinstance(value, bytes):
             return base64.b64encode(value).decode("utf-8")
 
+        if isinstance(value, (datetime.datetime, datetime.date)):
+            return value.isoformat()
+
         if isinstance(value, (dict, list)):
             return json.dumps(value)
 
@@ -54,21 +58,19 @@ class OnlineStore:
         except (ValueError, TypeError):
             return value
 
-    def _generate_key(self, project_id: str, feature_group: str, row_data: dict[str, Any], entity_keys: list[str]) -> str:
+    def _generate_key(self, feature_group: str, row_data: dict[str, Any], entity_keys: list[str]) -> str:
         """
         Generate key for Redis
         """
-        key_parts = []
-        for key in entity_keys:
-            if key not in row_data:
-                raise ValueError(f"Missing primary key in data record: '{key}'")
-            key_parts.append(f"{key}:{row_data[key]}")
+        try:
+            # Best Format: fs:<feature_group_name>:<join_key_1>:<value_1>
+            entity_suffix = ":".join([f"{key}:{row_data[key]}" for key in entity_keys])
 
-        entity_suffix = ":".join(key_parts)
+            return f"fs:{feature_group}:{entity_suffix}"
+        except KeyError as e:
+            raise ValueError(f"Missing primary key in data record: {e}")
 
-        return f"fs:{project_id}:{feature_group}:{entity_suffix}"
-
-    def upsert_pyarrow_table(self, table: pa.Table, project_id: str, feature_group: str, entity_keys: list[str]) -> int:
+    def upsert_pyarrow_table(self, table: pa.Table, feature_group: str, entity_keys: list[str], time_to_live: int | None) -> int:
         """
         Write feature data from pyarrow tables to Redis
         """
@@ -80,6 +82,8 @@ class OnlineStore:
             logger.warning("[OnlineStore] No feature columns found to upsert")
             return 0
 
+        time_to_live = time_to_live if time_to_live is not None else DatasetConfig.TIME_TO_LIVE
+
         pipeline = self.redis_client.pipeline()
         upsert_count = 0
 
@@ -89,7 +93,6 @@ class OnlineStore:
             for row_data in records:
                 try:
                     redis_key = self._generate_key(
-                        project_id=project_id,
                         feature_group=feature_group,
                         row_data=row_data,
                         entity_keys=entity_keys
@@ -101,30 +104,35 @@ class OnlineStore:
                         for column_name in feature_column_names
                     }
 
-                    if feature_payload:
-                        pipeline.hset(redis_key, mapping=feature_payload)
-                        upsert_count += 1
+                    if not feature_payload: continue
 
-                        if upsert_count % self.chunk_size == 0:
-                            pipeline.execute()
+                    pipeline.hset(redis_key, mapping=feature_payload)
+
+                    if time_to_live: pipeline.expire(redis_key, time_to_live)
+
+                    upsert_count += 1
+
+                    if upsert_count % self.chunk_size != 0: continue
+
+                    pipeline.execute()
                 except Exception as e:
                     logger.warning("[OnlineStore] Row skipped (Redis mapping failure): %s", e)
 
         try:
             pipeline.execute()
-            logger.info("[OnlineStore] Successfully upserted %d records into %s: %s", upsert_count, project_id, feature_group)
+            logger.info("[OnlineStore] Successfully upserted %d records into: %s", upsert_count, feature_group)
             return upsert_count
         except Exception as e:
             logger.error("[OnlineStore] Failed to execute Redis pipeline: %s", e)
             raise RuntimeError(f"OnlineStore upsert error: {str(e)}")
 
-    def get_features(self, project_id: str, feature_group: str, entity_keys_dict: dict[str, str]) -> dict[str, Any] | None:
+    def get_features(self, feature_group: str, entity_keys_dict: dict[str, str]) -> dict[str, Any] | None:
         """
         Fetch features for an entity
         """
         key_parts = [f"{key}:{value}" for key, value in entity_keys_dict.items()]
         entity_suffix = ":".join(key_parts)
-        redis_key = f"fs:{project_id}:{feature_group}:{entity_suffix}"
+        redis_key = f"fs:{feature_group}:{entity_suffix}"
 
         raw_data = self.redis_client.hgetall(redis_key)
 

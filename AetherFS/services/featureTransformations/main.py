@@ -106,7 +106,6 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
         entity_keys, time_col, feat_cfg, windows = self._extract_agg_config(run_req)
 
         return {
-            "project_id": run_req.project_id,
             "location_uri": run_req.location_uri,
             "output_uri": run_req.output_uri,
             "source_format": self._map_source_format(run_req.source_format),
@@ -120,7 +119,9 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             "entity_keys": entity_keys,
             "time_column": time_col,
             "features_config": feat_cfg,
-            "windows": windows
+            "windows": windows,
+            "sync_online": run_req.sync_online,
+            "time_to_live": run_req.time_to_live if run_req.HasField('time_to_live') else None
         }
 
     def _background_pipeline_task(self, kwargs, job_id):

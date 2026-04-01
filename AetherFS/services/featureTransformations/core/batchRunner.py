@@ -169,6 +169,8 @@ class BatchPipelineRunner:
         time_column: str | None = None,
         features_config: list[dict] | None = None,
         windows: list[str] | None = None,
+        sync_online: bool = False,
+        time_to_live: int | None = None
     ) -> dict[str, str]:
         """
         Start pipeline
@@ -194,9 +196,12 @@ class BatchPipelineRunner:
                     udf_code=transform_definition,
                     output_uri=output_uri,
                     source_format=source_format,
+                    time_to_live=time_to_live,
                     requirements=requirements,
                     connection_options=connection_options,
-                    target_datasets=target_datasets
+                    target_datasets=target_datasets,
+                    entity_keys=entity_keys,
+                    sync_online=sync_online
                 )
 
             case TransformationType.SQL:
@@ -216,6 +221,16 @@ class BatchPipelineRunner:
 
                         # Save Offline Storage
                         saved_metadata[ds_name] = self.offline_store.save_pyarrow_table(result_table, output_uri, ds_name)
+
+                        # Save to Online Storage for Real-time Inference
+                        if not entity_keys or not sync_online: continue
+
+                        self.online_store.upsert_pyarrow_table(
+                            table=result_table,
+                            feature_group=ds_name,
+                            entity_keys=entity_keys,
+                            time_to_live=time_to_live
+                        )
 
                 return saved_metadata
 
@@ -239,6 +254,16 @@ class BatchPipelineRunner:
 
                         # Save Offline Storage
                         saved_metadata[ds_name] = self.offline_store.save_pyarrow_table(result_table, output_uri, ds_name)
+
+                        # Save to Online Storage for Real-time Inference
+                        if not entity_keys or not sync_online: continue
+
+                        self.online_store.upsert_pyarrow_table(
+                            table=result_table,
+                            feature_group=ds_name,
+                            entity_keys=entity_keys,
+                            time_to_live=time_to_live
+                        )
 
                 return saved_metadata
 

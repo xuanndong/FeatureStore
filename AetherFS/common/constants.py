@@ -91,3 +91,4 @@ class DatasetConfig:
     SINGLE_FILE_COUNT = 1
     HEAD_INDEX = 0
     NULL_VALUE = "null"
+    TIME_TO_LIVE = 7 * 24 * 60 * 60 # Set TTL to 7 days

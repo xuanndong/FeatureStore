@@ -10,7 +10,7 @@ venv/
 infra/postgres/data/
 
 # Alembic
-alembic/versions/*.pyc
+AetherFS/alembic/versions/
 
 # IDE
 .vscode/
@@ -18,3 +18,5 @@ alembic/versions/*.pyc
 
 # Protocol
 grpc
+
+AetherFS/services/featureTransformations/*.md

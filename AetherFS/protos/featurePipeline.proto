@@ -64,26 +64,29 @@ message PreviewResponse {
 
 // Run Flow Request & Response
 message RunRequest {
-    string project_id = 1;
-    string location_uri = 2;
-    string output_uri = 3;
-    SourceFormat source_format = 4;
-    TransformationType transform_type = 5;
-    string transform_definition = 6;
+    string location_uri = 1;
+    string output_uri = 2;
+    SourceFormat source_format = 3;
+    TransformationType transform_type = 4;
+    string transform_definition = 5;
 
     // Configuration
-    string connection_options_json = 7;
-    double last_updated = 8; // Unix timestamp
-    ReadPolicy read_policy = 9;
+    string connection_options_json = 6;
+    double last_updated = 7; // Unix timestamp
+    ReadPolicy read_policy = 8;
 
     // UDF Specific
-    repeated string requirements = 10;
+    repeated string requirements = 9;
 
     // Select Target Dataset
-    repeated string target_datasets = 11;
+    repeated string target_datasets = 10;
 
     // Aggregation Specific
-    AggregationConfig aggregation_config = 12;
+    AggregationConfig aggregation_config = 11;
+
+    bool sync_online = 12;
+
+    optional int32 time_to_live = 13;
 }
 
 message RunResponse {

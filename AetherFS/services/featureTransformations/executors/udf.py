@@ -11,7 +11,7 @@ from pyarrow import dataset as ds
 # User define Libraries
 from services.featureTransformations.core.storage import FsspecClient
 from services.featureTransformations.materializers.offlineStore import OfflineStore
-from services.featureTransformations.core.wrapper import UDFWrapper
+from services.featureTransformations.core.wrapper import UDFEngine, RedisIngestion
 from common.constants import UDFConstants, RayConfig, VirtualDataset, SourceFormat, DatasetConfig
 from common.config import settings
 
@@ -28,7 +28,7 @@ class RayBased:
             cls._instance = super(RayBased, cls).__new__(cls)
             cls._instance._initialize_ray()
         return cls._instance
-    
+
     def _initialize_ray(self):
         """
         Initializes the Ray local cluster only if not already running
@@ -60,7 +60,7 @@ class RayBased:
         """
         if not ray.is_initialized():
             return
-            
+
         ray.shutdown()
         RayBased._instance = None
         logger.info("Ray Engine terminated.")
@@ -97,7 +97,7 @@ class RayBased:
             ray_dataset = ray.data.from_arrow(sample_table)
             try:
                 transformed = ray_dataset.map_batches(
-                    UDFWrapper,
+                    UDFEngine,
                     fn_constructor_kwargs={"udf_code": udf_code, "class_name": UDFConstants.DEFAULT_CLASS_NAME, "dataset_name": ds_name},
                     batch_size=limit,
                     compute=ray.data.ActorPoolStrategy(size=1),
@@ -110,7 +110,7 @@ class RayBased:
 
         return preview_results
 
-    def execute_udf_structure(self, dataset: ds.Dataset | dict[str, ds.Dataset], location_uri: str, udf_code: str, output_uri: str, target_datasets: list[str] | None = None, requirements: list[str] | None = None, connection_options: dict | None = None) -> dict[str, str]:
+    def execute_udf_structure(self, dataset: ds.Dataset | dict[str, ds.Dataset], udf_code: str, output_uri: str, time_to_live: int, target_datasets: list[str] | None = None, requirements: list[str] | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
         """
         Executes the UDF across the entire dataset and writes the output to storage
         """
@@ -126,17 +126,25 @@ class RayBased:
         for ds_name, data in datasets_to_process.items():
             if target_datasets and ds_name not in target_datasets:
                 continue
-            
+
             try:
                 ray_dataset = ray.data.from_arrow(data)
 
                 transformed = ray_dataset.map_batches(
-                    UDFWrapper,
+                    UDFEngine,
                     fn_constructor_kwargs={"udf_code": udf_code, "class_name": UDFConstants.DEFAULT_CLASS_NAME, "dataset_name": ds_name},
                     compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2),
                     **remote_args
                 )
-                
+
+                if entity_keys and sync_online:
+                    transformed = transformed.map_batches(
+                        RedisIngestion,
+                        fn_constructor_kwargs={"feature_group": ds_name, "entity_keys": entity_keys, "time_to_live": time_to_live},
+                        batch_format="pyarrow",
+                        compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2)
+                    )
+
                 final_uri = offline_store.save_ray_dataset(dataset=transformed, output_uri=output_uri, dataset_name=ds_name)
                 saved_paths[ds_name] = final_uri
             except RayTaskError as e:
@@ -176,7 +184,7 @@ class RayBased:
 
         try:
             transformed = ray_dataset.map_batches(
-                UDFWrapper,
+                UDFEngine,
                 fn_constructor_kwargs={"udf_code": udf_code, "class_name": UDFConstants.DEFAULT_CLASS_NAME, "dataset_name": ds_name},
                 batch_size=limit,
                 compute=ray.data.ActorPoolStrategy(size=1),
@@ -187,7 +195,7 @@ class RayBased:
             logger.error("Worker crashed during unstructured preview.")
             raise RuntimeError(f"Preview error: {str(e.cause)}")
 
-    def execute_udf_unstructure(self, dataset: list[str], location_uri: str, udf_code: str, output_uri: str, source_format: str, requirements: list[str] | None = None, connection_options: dict | None = None) -> dict[str, str]:
+    def execute_udf_unstructure(self, dataset: list[str], location_uri: str, udf_code: str, output_uri: str, source_format: str, time_to_live: int, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
         """
         Executes UDF across unstructured files and writes the output (usually as Parquet metadata/embeddings) to internal storage.
         """
@@ -218,15 +226,23 @@ class RayBased:
 
         try:
             transformed = ray_dataset.map_batches(
-                UDFWrapper,
+                UDFEngine,
                 fn_constructor_kwargs={"udf_code": udf_code, "class_name": UDFConstants.DEFAULT_CLASS_NAME, "dataset_name": ds_name},
                 compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2),
                 **remote_args
             )
-            
+
+            if entity_keys and sync_online:
+                transformed = transformed.map_batches(
+                    RedisIngestion,
+                    fn_constructor_kwargs={"feature_group": ds_name, "entity_keys": entity_keys, "time_to_live": time_to_live},
+                    batch_format="pyarrow",
+                    compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2)
+                )
+
             offline_store = OfflineStore()
             final_uri = offline_store.save_ray_dataset(dataset=transformed, output_uri=output_uri, dataset_name=ds_name)
-            
+
             return {ds_name: final_uri}
         except RayTaskError as e:
             logger.error("Worker crashed during unstructured execution.")
@@ -238,14 +254,19 @@ class RayBased:
         location_uri: str, 
         udf_code: str, 
         output_uri: str, 
-        source_format: str, 
+        source_format: str,
+        time_to_live: int | None,
         requirements: list[str] | None = None, 
         connection_options: dict | None = None, 
-        target_datasets: list[str] | None = None
+        target_datasets: list[str] | None = None,
+        entity_keys: list[str] | None = None,
+        sync_online: bool = False
     ) -> dict[str, str]:
         """
         Automatically route data to structured or unstructured pipelines
         """
+        time_to_live = time_to_live if time_to_live is not None else DatasetConfig.TIME_TO_LIVE
+
         if isinstance(dataset, list):
             return self.execute_udf_unstructure(
                 dataset=dataset,
@@ -253,18 +274,22 @@ class RayBased:
                 udf_code=udf_code,
                 output_uri=output_uri,
                 source_format=source_format,
+                time_to_live=time_to_live,
                 requirements=requirements,
-                connection_options=connection_options
+                connection_options=connection_options,
+                entity_keys=entity_keys,
+                sync_online=sync_online
             )
         elif isinstance(dataset, (ds.Dataset, dict)):
             return self.execute_udf_structure(
                 dataset=dataset,
-                location_uri=location_uri,
                 udf_code=udf_code,
                 output_uri=output_uri,
+                time_to_live=time_to_live,
                 target_datasets=target_datasets,
                 requirements=requirements,
-                connection_options=connection_options
+                entity_keys=entity_keys,
+                sync_online=sync_online
             )
         else:
             raise TypeError(f"Unsupported dataset format: {type(dataset)}")
