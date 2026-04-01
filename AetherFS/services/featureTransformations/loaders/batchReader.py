@@ -122,7 +122,7 @@ class BatchReader:
 
         # Support for single table (dataset)
         if isinstance(dataset, ds.Dataset):
-            return {VirtualTable.SOURCE_DATA: self._extract_fields(dataset)}
+            return {VirtualTable.SOURCE_DATA.value: self._extract_fields(dataset)}
 
         return {}
 

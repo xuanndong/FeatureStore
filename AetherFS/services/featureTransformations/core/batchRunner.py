@@ -117,7 +117,7 @@ class BatchPipelineRunner:
                 }
 
             case TransformationType.SQL:
-                datasets_to_process = dataset_object if isinstance(dataset_object, dict) else { VirtualTable.SOURCE_DATA: dataset_object }
+                datasets_to_process = dataset_object if isinstance(dataset_object, dict) else { VirtualTable.SOURCE_DATA.value: dataset_object }
                 preview_results = {}
 
                 for ds_name, data in datasets_to_process.items():
@@ -133,7 +133,7 @@ class BatchPipelineRunner:
                 return preview_results
 
             case TransformationType.AGGREGATION:
-                datasets_to_process = dataset_object if isinstance(dataset_object, dict) else { VirtualTable.SOURCE_DATA: dataset_object }
+                datasets_to_process = dataset_object if isinstance(dataset_object, dict) else { VirtualTable.SOURCE_DATA.value: dataset_object }
                 preview_results = {}
                 for ds_name, data in datasets_to_process.items():
                     with self.agg_engine.execute(
@@ -208,7 +208,7 @@ class BatchPipelineRunner:
                 if isinstance(dataset_object, list):
                     raise ValueError("SQL Transformation only supports structured tabular data")
 
-                datasets_to_process = dataset_object if isinstance(dataset_object, dict) else { VirtualTable.SOURCE_DATA: dataset_object }
+                datasets_to_process = dataset_object if isinstance(dataset_object, dict) else { VirtualTable.SOURCE_DATA.value: dataset_object }
                 saved_metadata = {}
 
                 for ds_name, data in datasets_to_process.items():
@@ -238,7 +238,7 @@ class BatchPipelineRunner:
                 if isinstance(dataset_object, list):
                     raise ValueError("Aggregation only supports structured tabular data")
 
-                datasets_to_process = dataset_object if isinstance(dataset_object, dict) else { VirtualTable.SOURCE_DATA: dataset_object }
+                datasets_to_process = dataset_object if isinstance(dataset_object, dict) else { VirtualTable.SOURCE_DATA.value: dataset_object }
                 saved_metadata = {}
 
                 for ds_name, data in datasets_to_process.items():

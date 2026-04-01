@@ -24,8 +24,9 @@ from common.grpc import featurePipeline_pb2 as pb2
 from common.grpc import featurePipeline_pb2_grpc as pb2_grpc
 
 # User define Libraries
-from common.constants import TransformationType, ReadPolicies, SourceFormat
+from common.constants import TransformationType, ReadPolicies, SourceFormat, Materialization
 from core.batchRunner import BatchPipelineRunner
+from core import webhook
 
 
 # Logs
@@ -124,14 +125,17 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             "time_to_live": run_req.time_to_live if run_req.HasField('time_to_live') else None
         }
 
-    def _background_pipeline_task(self, kwargs, job_id):
+    def _background_pipeline_task(self, kwargs, feature_group_id, webhook_url):
         try:
-            # TODO: Update database thanh running
+            webhook.report_status(webhook_url, feature_group_id, Materialization.RUNNING.value, "Pipeline is currently running")
+
             saved_metadata = self.runner.run(**kwargs)
-            # TODO: Cap nhat database thanh COMplete
+
+            msg = f"Successfully processed {len(saved_metadata)} datasets"
+            webhook.report_status(webhook_url, feature_group_id, Materialization.COMPLETED.value, msg)
         except Exception as e:
-            logger.error(f"Data processing error for {job_id}: {str(e)}")
-            # TODO: Cap nhat database
+            logger.error(f"Data processing error for {feature_group_id}: {str(e)}")
+            webhook.report_status(webhook_url, feature_group_id, Materialization.FAILED.value, f"Error")
 
     def PreviewFeatureGroup(self, request, context):
         logger.info(f"Received Preview request for URI: {request.location_uri}")
@@ -172,19 +176,20 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
         try:
             kwargs = self._build_run_kwargs(request)
 
-            # Generate key
-            job_id = f"run_once_{uuid.uuid4().hex[:8]}"
+            webhook_url = request.webhook_url if request.HasField("webhook_url") else ""
+            run_job_id = f"run_{request.feature_group_id}"
 
             self.scheduler.add_job(
                 func=self._background_pipeline_task,
                 trigger=DateTrigger(run_date=datetime.now()), 
-                args=[kwargs, job_id],
-                id=job_id
+                args=[kwargs, request.feature_group_id, webhook_url],
+                id=run_job_id,
+                replace_existing=True
             )
 
             return pb2.RunResponse(
-                job_id=job_id,
-                status="SUBMITTED",
+                feature_group_id=request.feature_group_id,
+                status=Materialization.PENDING.value,
                 message="Process is running in the background"
             )
         except Exception as e:
@@ -192,16 +197,19 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             context.abort(grpc.StatusCode.INTERNAL, str(e))
 
     def ScheduleBatchPipeline(self, request, context):
+        feature_group_id = request.run_config.feature_group_id
+        job_id = f"cron_{feature_group_id}"
+
         logger.info(f"Received Schedule request. Cron: {request.cron_expression}")
-
         try:
-            job_id = f"cron_{uuid.uuid4().hex[:8]}"
-
             if not request.is_active:
+                if self.scheduler.get_job(job_id):
+                    self.scheduler.remove_job(job_id)
+                    logger.info(f"Successfully removed schedule for {feature_group_id}")
+
                 return pb2.ScheduleResponse(
-                    job_id="unknown",
-                    status="PAUSED",
-                    next_run_at="0",
+                    job_id=job_id,
+                    next_run_at=0.0,
                     message="Pause command received"
                 )
 
@@ -209,17 +217,18 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             kwargs = self._build_run_kwargs(request.run_config)
             trigger = CronTrigger.from_crontab(request.cron_expression)
 
+            webhook_url = request.run_config.webhook_url if request.run_config.HasField('webhook_url') else ""
+
             job = self.scheduler.add_job(
                 func=self._background_pipeline_task,
                 trigger=trigger,
-                args=[kwargs, job_id],
+                args=[kwargs, feature_group_id, webhook_url],
                 id=job_id,
                 replace_existing=True
             )
 
             return pb2.ScheduleResponse(
-                job_id=job.id,
-                status="SCHEDULED",
+                job_id=job.id, # ID cua lap lich, khong luu lam gi
                 next_run_at=job.next_run_time.timestamp() if job.next_run_time else 0.0,
                 message=f"Schedule set successfully: {request.cron_expression}"
             )

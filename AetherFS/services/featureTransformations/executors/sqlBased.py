@@ -53,7 +53,7 @@ class SQLBased:
         self,
         dataset: ds.Dataset | pa.Table | dict[str, ds.Dataset],
         sql_query: str,
-        table_name: VirtualTable = VirtualTable.SOURCE_DATA,
+        table_name: str = VirtualTable.SOURCE_DATA.value,
         limit: int | None = None
     ) -> pa.Table:
         """

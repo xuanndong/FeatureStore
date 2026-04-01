@@ -62,7 +62,7 @@ message PreviewResponse {
 }
 
 
-// Run Flow Request & Response
+// Run Flow Request & Response (Background Tasks)
 message RunRequest {
     string location_uri = 1;
     string output_uri = 2;
@@ -87,10 +87,13 @@ message RunRequest {
     bool sync_online = 12;
 
     optional int32 time_to_live = 13;
+
+    string feature_group_id = 14; 
+    optional string webhook_url = 15;
 }
 
 message RunResponse {
-    string job_id = 1;
+    string feature_group_id = 1;
     string status = 2;
     string message = 3;
 }
@@ -107,9 +110,8 @@ message ScheduleRequest {
 
 message ScheduleResponse {
     string job_id = 1; // feature_group_id
-    string status = 2;
-    double next_run_at = 3; // Unix timestamp
-    string message = 4; // Information
+    double next_run_at = 2; // Unix timestamp
+    string message = 3; // Information
 }
 
 

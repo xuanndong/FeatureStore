@@ -26,3 +26,6 @@ grpcio-reflection
 
 # --- Scheduler ---
 APScheduler
+
+# --- Webhook Callback ---
+httpx

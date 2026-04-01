@@ -71,7 +71,7 @@ class RayBased:
         """
         if isinstance(dataset, ds.Dataset) and hasattr(dataset, "files") and len(dataset.files) == DatasetConfig.SINGLE_FILE_COUNT:
             return os.path.splitext(os.path.basename(dataset.files[DatasetConfig.HEAD_INDEX]))[DatasetConfig.HEAD_INDEX]
-        return VirtualDataset.DEFAULT_STRUCTURED
+        return VirtualDataset.DEFAULT_STRUCTURED.value
 
     def preview_transform_structure(self, dataset: ds.Dataset | pa.Table | dict[str, ds.Dataset | pa.Table], udf_code: str, target_datasets: list[str] | None = None, requirements: list[str] | None = None, limit: int = 10) -> dict[str, list[dict]]:
         """
@@ -153,7 +153,7 @@ class RayBased:
 
         return saved_paths
 
-    def preview_transform_unstructure(self, dataset: list[str], location_uri: str, udf_code: str, source_format: str, requirements: list[str] | None = None, connection_options: dict | None = None, limit: int = 1) -> dict[str, list[dict]]:
+    def preview_transform_unstructure(self, dataset: list[str], location_uri: str, udf_code: str, source_format: SourceFormat, requirements: list[str] | None = None, connection_options: dict | None = None, limit: int = 1) -> dict[str, list[dict]]:
         """
         Runs the UDF on a small sample of unstructured data (Images, Text, Audio, etc.).
         """
@@ -180,7 +180,7 @@ class RayBased:
                 raise ValueError(f"Unsupported format: '{source_format}'")
 
         remote_args = {RayConfig.RUNTIME_ENV_KEY: {RayConfig.PIP_KEY: requirements}} if requirements else {}
-        ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED
+        ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED.value
 
         try:
             transformed = ray_dataset.map_batches(
@@ -222,7 +222,7 @@ class RayBased:
                 raise ValueError(f"Unsupported format: '{source_format}'")
 
         remote_args = {RayConfig.RUNTIME_ENV_KEY: {RayConfig.PIP_KEY: requirements}} if requirements else {}
-        ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED
+        ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED.value
 
         try:
             transformed = ray_dataset.map_batches(

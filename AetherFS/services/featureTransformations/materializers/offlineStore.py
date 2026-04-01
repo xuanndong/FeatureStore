@@ -117,7 +117,7 @@ class OfflineStore:
         """
         fs, base_path = self._get_fs_and_base_path(output_uri)
 
-        is_default = dataset_name in [VirtualDataset.DEFAULT_STRUCTURED, VirtualDataset.DEFAULT_UNSTRUCTURED]
+        is_default = dataset_name in [VirtualDataset.DEFAULT_STRUCTURED.value, VirtualDataset.DEFAULT_UNSTRUCTURED.value]
 
         file_name = "data.parquet" if is_default else f"{dataset_name}.parquet"
         summary_name = "summary.json" if is_default else f"{dataset_name}_summary.json"
@@ -152,7 +152,7 @@ class OfflineStore:
         """
         fs, base_path = self._get_fs_and_base_path(output_uri)
 
-        is_default = dataset_name in [VirtualDataset.DEFAULT_STRUCTURED, VirtualDataset.DEFAULT_UNSTRUCTURED]
+        is_default = dataset_name in [VirtualDataset.DEFAULT_STRUCTURED.value, VirtualDataset.DEFAULT_UNSTRUCTURED.value]
         dir_name = "" if is_default else dataset_name
         summary_name = "summary.json" if is_default else f"{dataset_name}_summary.json"
 
