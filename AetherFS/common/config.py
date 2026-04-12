@@ -23,6 +23,9 @@ class Settings:
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+    # Worker
+    AETHER_MAX_WORKERS: int = int(os.getenv("AETHER_MAX_WORKERS", 2))
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT.lower() in ["production", "prod"]

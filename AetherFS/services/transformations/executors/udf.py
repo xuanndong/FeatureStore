@@ -9,9 +9,9 @@ import pyarrow as pa
 from pyarrow import dataset as ds
 
 # User define Libraries
-from services.featureTransformations.core.storage import FsspecClient
-from services.featureTransformations.materializers.offlineStore import OfflineStore
-from services.featureTransformations.core.wrapper import UDFEngine, RedisIngestion
+from services.transformations.core.storage import FsspecClient
+from services.transformations.materializers.offlineStore import OfflineStore
+from services.transformations.core.wrapper import UDFEngine, RedisIngestion
 from common.constants import UDFConstants, RayConfig, VirtualDataset, SourceFormat, DatasetConfig
 from common.config import settings
 
@@ -163,8 +163,17 @@ class RayBased:
         client = FsspecClient(location_uri, connection_options)
         scheme_prefix = f"{client.scheme}://" if client.scheme else ""
         sample_paths = [p.replace(scheme_prefix, "") for p in dataset[:limit]] if scheme_prefix else dataset[:limit]
+        ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED.value
 
+
+        full_sample_uris = dataset[:limit]
         fs = client.get_raw_fs()
+
+        fn_kwargs = {
+            "udf_code": udf_code, 
+            "class_name": UDFConstants.DEFAULT_CLASS_NAME, 
+            "dataset_name": ds_name
+        }
 
         match source_format:
             case SourceFormat.IMAGE:
@@ -173,19 +182,24 @@ class RayBased:
             case SourceFormat.TEXT:
                 ray_dataset = ray.data.read_text(sample_paths, filesystem=fs)
 
-            case SourceFormat.AUDIO | SourceFormat.VIDEO | SourceFormat.BINARY:
+            case SourceFormat.AUDIO | SourceFormat.VIDEO:
+                items = [{"path": p} for p in full_sample_uris]
+                ray_dataset = ray.data.from_items(items)
+
+                fn_kwargs["connection_options"] = connection_options
+
+            case SourceFormat.BINARY:
                 ray_dataset = ray.data.read_binary_files(sample_paths, filesystem=fs)
 
             case _:
                 raise ValueError(f"Unsupported format: '{source_format}'")
 
         remote_args = {RayConfig.RUNTIME_ENV_KEY: {RayConfig.PIP_KEY: requirements}} if requirements else {}
-        ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED.value
 
         try:
             transformed = ray_dataset.map_batches(
                 UDFEngine,
-                fn_constructor_kwargs={"udf_code": udf_code, "class_name": UDFConstants.DEFAULT_CLASS_NAME, "dataset_name": ds_name},
+                fn_constructor_kwargs=fn_kwargs,
                 batch_size=limit,
                 compute=ray.data.ActorPoolStrategy(size=1),
                 **remote_args
@@ -205,8 +219,15 @@ class RayBased:
         client = FsspecClient(location_uri, connection_options)
         scheme_prefix = f"{client.scheme}://" if client.scheme else ""
         clean_paths = [p.replace(scheme_prefix, "") for p in dataset] if scheme_prefix else dataset
+        ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED.value
 
         fs = client.get_raw_fs()
+
+        fn_kwargs = {
+            "udf_code": udf_code, 
+            "class_name": UDFConstants.DEFAULT_CLASS_NAME, 
+            "dataset_name": ds_name
+        }
 
         match source_format:
             case SourceFormat.IMAGE:
@@ -215,19 +236,24 @@ class RayBased:
             case SourceFormat.TEXT:
                 ray_dataset = ray.data.read_text(clean_paths, filesystem=fs)
 
-            case SourceFormat.AUDIO | SourceFormat.VIDEO | SourceFormat.BINARY:
+            case SourceFormat.AUDIO | SourceFormat.VIDEO:
+                items = [{"path": p} for p in dataset]
+                ray_dataset = ray.data.from_items(items)
+
+                fn_kwargs["connection_options"] = connection_options
+
+            case SourceFormat.BINARY:
                 ray_dataset = ray.data.read_binary_files(clean_paths, filesystem=fs)
 
             case _:
                 raise ValueError(f"Unsupported format: '{source_format}'")
 
         remote_args = {RayConfig.RUNTIME_ENV_KEY: {RayConfig.PIP_KEY: requirements}} if requirements else {}
-        ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED.value
 
         try:
             transformed = ray_dataset.map_batches(
                 UDFEngine,
-                fn_constructor_kwargs={"udf_code": udf_code, "class_name": UDFConstants.DEFAULT_CLASS_NAME, "dataset_name": ds_name},
+                fn_constructor_kwargs=fn_kwargs,
                 compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2),
                 **remote_args
             )

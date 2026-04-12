@@ -3,7 +3,7 @@ import logging
 import os
 
 # User Defined Libraries
-from services.featureTransformations.core.storage import FsspecClient
+from services.transformations.core.storage import FsspecClient
 from common.constants import SourceFormat, ReadPolicies, VirtualTable, DatasetConfig
 
 # Third party Libraries

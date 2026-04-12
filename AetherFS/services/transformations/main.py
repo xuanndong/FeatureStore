@@ -4,7 +4,6 @@ import json
 import concurrent.futures
 import sys
 import os
-import uuid
 from datetime import datetime
 
 # Path processing
@@ -25,6 +24,7 @@ from common.grpc import featurePipeline_pb2_grpc as pb2_grpc
 
 # User define Libraries
 from common.constants import TransformationType, ReadPolicies, SourceFormat, Materialization
+from common.config import settings
 from core.batchRunner import BatchPipelineRunner
 from core import webhook
 
@@ -38,7 +38,7 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
         self.runner = BatchPipelineRunner()
 
         executors = {
-            'default': ThreadPoolExecutor(max_workers=2) 
+            'default': ThreadPoolExecutor(max_workers=settings.AETHER_MAX_WORKERS) 
         }
 
         job_defaults = {
@@ -49,7 +49,8 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
         # Schedule
         self.scheduler = BackgroundScheduler(executors=executors, job_defaults=job_defaults)
         self.scheduler.start()
-        logger.info("Background Scheduler initialized with max_workers=2. Ready for heavy loads!")
+
+        logger.info(f"Background Scheduler initialized with max_workers={settings.AETHER_MAX_WORKERS}. Ready for heavy loads!")
 
     def _parse_json_safe(self, json_str: str):
         if not json_str:
@@ -135,7 +136,7 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             webhook.report_status(webhook_url, feature_group_id, Materialization.COMPLETED.value, msg)
         except Exception as e:
             logger.error(f"Data processing error for {feature_group_id}: {str(e)}")
-            webhook.report_status(webhook_url, feature_group_id, Materialization.FAILED.value, f"Error")
+            webhook.report_status(webhook_url, feature_group_id, Materialization.FAILED.value, f"Error: {str(e)}")
 
     def PreviewFeatureGroup(self, request, context):
         logger.info(f"Received Preview request for URI: {request.location_uri}")
@@ -240,8 +241,10 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             context.abort(grpc.StatusCode.INTERNAL, str(e))
 
 def serve():
+    instance = FeaturePipelineAPI()
+
     server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
-    pb2_grpc.add_PipelineServiceServicer_to_server(FeaturePipelineAPI(), server)
+    pb2_grpc.add_PipelineServiceServicer_to_server(instance, server)
 
     # Enable Reflection to allow testing via Postman
     SERVICE_NAMES = (
@@ -254,10 +257,41 @@ def serve():
     server.add_insecure_port(f"[::]:{port}")
     server.start()
     logger.info(f"Feature Transformation gRPC server is running on port {port}...")
-    server.wait_for_termination()
+
+    try:
+        server.wait_for_termination()
+    except KeyboardInterrupt:
+        print("\n[bold red]Stopping...[/bold red]")
+        logger.info("Shutdown system")
+        server.stop(5).wait()
+
+        if instance.scheduler.running:
+            instance.scheduler.shutdown(wait=False)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    
+    import builtins
+    from rich import print as printr
+    from rich import traceback, pretty
+    from rich.logging import RichHandler
+    from rich.console import Console
+    from rich.theme import Theme
+
+    # Override
+    builtins.print = printr
+
+    # Rich
+    traceback.install()
+    pretty.install()
+
+    console = Console(theme=Theme({"log.time": "yellow"}))
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", handlers=[RichHandler(console=console)])
+
+    print("""[bold cyan]
+    ╔═╗╔═╗╔╦╗╦ ╦╔═╗╦═╗
+    ╠═╣║╣  ║ ╠═╣║╣ ╠╦╝
+    ╩ ╩╚═╝ ╩ ╩ ╩╚═╝╩╚═ (Distributed Feature Store)
+    [/bold cyan]""")
+
     os.environ["RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO"] = "0"
     serve() 

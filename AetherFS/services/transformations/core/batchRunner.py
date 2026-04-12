@@ -3,13 +3,13 @@ import logging
 import base64
 
 # User define Libraries
-from services.featureTransformations.loaders.batchReader import BatchReader
-from services.featureTransformations.executors.sqlBased import SQLBased
-from services.featureTransformations.executors.udf import RayBased
-from services.featureTransformations.executors.batchAggregations import AggregationBased
+from services.transformations.loaders.batchReader import BatchReader
+from services.transformations.executors.sqlBased import SQLBased
+from services.transformations.executors.udf import RayBased
+from services.transformations.executors.batchAggregations import AggregationBased
 from common.constants import TransformationType, ReadPolicies, SourceFormat, VirtualTable
-from services.featureTransformations.materializers.offlineStore import OfflineStore
-from services.featureTransformations.materializers.onlineStore import OnlineStore
+from services.transformations.materializers.offlineStore import OfflineStore
+from services.transformations.materializers.onlineStore import OnlineStore
 
 
 # Logs
