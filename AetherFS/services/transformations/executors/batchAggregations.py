@@ -7,7 +7,7 @@ import duckdb
 import pyarrow as pa
 import pyarrow.dataset as ds
 
-# User define Libraries
+# Local Libraries
 from common.constants import VirtualTable, DuckDBConfig
 
 

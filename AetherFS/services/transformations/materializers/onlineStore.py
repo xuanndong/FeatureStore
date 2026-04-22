@@ -9,7 +9,7 @@ from typing import Any
 import pyarrow as pa
 import redis
 
-# User define Libraries
+# Local Libraries
 from common.config import settings
 from common.constants import DatasetConfig
 

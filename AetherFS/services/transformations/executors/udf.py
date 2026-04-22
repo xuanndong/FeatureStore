@@ -8,7 +8,7 @@ from ray.exceptions import RayTaskError
 import pyarrow as pa
 from pyarrow import dataset as ds
 
-# User define Libraries
+# Local Libraries
 from services.transformations.core.storage import FsspecClient
 from services.transformations.materializers.offlineStore import OfflineStore
 from services.transformations.core.wrapper import UDFEngine, RedisIngestion

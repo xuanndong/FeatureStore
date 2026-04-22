@@ -2,7 +2,7 @@
 import logging
 import base64
 
-# User define Libraries
+# Local Libraries
 from services.transformations.loaders.batchReader import BatchReader
 from services.transformations.executors.sqlBased import SQLBased
 from services.transformations.executors.udf import RayBased

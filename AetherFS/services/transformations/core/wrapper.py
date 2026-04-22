@@ -4,7 +4,7 @@ import logging
 # Third party Libraries
 import pyarrow as pa
 
-# User define Libraries
+# Local Libraries
 from common.constants import UDFConstants
 from services.transformations.core.storage import FsspecClient
 

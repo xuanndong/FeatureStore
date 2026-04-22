@@ -2,7 +2,7 @@
 from enum import Enum
 from dataclasses import dataclass, field
 
-# User define Libraries
+# Local Libraries
 from services.transformations.core.system import SystemUtils
 
 
@@ -92,3 +92,11 @@ class DatasetConfig:
     HEAD_INDEX = 0
     NULL_VALUE = "null"
     TIME_TO_LIVE = 7 * 24 * 60 * 60 # Set TTL to 7 days
+
+
+class ScheduleInterval(str, Enum):
+    HOURLY = "hourly"
+    DAILY = "daily"
+    WEEKLY = "1_week"
+    MONTHLY = "1_month"
+    QUARTERLY = "3_months"

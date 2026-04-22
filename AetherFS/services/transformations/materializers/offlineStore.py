@@ -14,7 +14,7 @@ from pyarrow import fs as pafs
 import pandas as pd
 import ray.data
 
-# User define Libraries
+# Local Libraries
 from common.config import settings
 from common.constants import VirtualDataset
 

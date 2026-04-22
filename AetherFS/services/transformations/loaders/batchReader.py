@@ -2,7 +2,7 @@
 import logging
 import os
 
-# User Defined Libraries
+# Local Libraries
 from services.transformations.core.storage import FsspecClient
 from common.constants import SourceFormat, ReadPolicies, VirtualTable, DatasetConfig
 
@@ -27,10 +27,10 @@ class BatchReader:
 
     def load_data(
         self, 
-        location_uri: str, 
-        source_format: SourceFormat, 
-        last_updated: float | None = None, 
-        connection_options: dict | None = None, 
+        location_uri: str,
+        source_format: SourceFormat,
+        last_updated: float | None = None,
+        connection_options: dict | None = None,
         policy: ReadPolicies = ReadPolicies.FULL_READ,
         partitioning: str | None = None,
         is_multi_file: bool = False

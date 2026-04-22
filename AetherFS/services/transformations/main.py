@@ -22,7 +22,7 @@ from apscheduler.triggers.date import DateTrigger
 from common.grpc import featurePipeline_pb2 as pb2
 from common.grpc import featurePipeline_pb2_grpc as pb2_grpc
 
-# User define Libraries
+# Local Libraries
 from common.constants import TransformationType, ReadPolicies, SourceFormat, Materialization
 from common.config import settings
 from core.batchRunner import BatchPipelineRunner
@@ -197,48 +197,6 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             logger.error(f"Run Pipeline Submission Failed: {str(e)}", exc_info=True)
             context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-    def ScheduleBatchPipeline(self, request, context):
-        feature_group_id = request.run_config.feature_group_id
-        job_id = f"cron_{feature_group_id}"
-
-        logger.info(f"Received Schedule request. Cron: {request.cron_expression}")
-        try:
-            if not request.is_active:
-                if self.scheduler.get_job(job_id):
-                    self.scheduler.remove_job(job_id)
-                    logger.info(f"Successfully removed schedule for {feature_group_id}")
-
-                return pb2.ScheduleResponse(
-                    job_id=job_id,
-                    next_run_at=0.0,
-                    message="Pause command received"
-                )
-
-            # Schedule
-            kwargs = self._build_run_kwargs(request.run_config)
-            trigger = CronTrigger.from_crontab(request.cron_expression)
-
-            webhook_url = request.run_config.webhook_url if request.run_config.HasField('webhook_url') else ""
-
-            job = self.scheduler.add_job(
-                func=self._background_pipeline_task,
-                trigger=trigger,
-                args=[kwargs, feature_group_id, webhook_url],
-                id=job_id,
-                replace_existing=True
-            )
-
-            return pb2.ScheduleResponse(
-                job_id=job.id, # ID cua lap lich, khong luu lam gi
-                next_run_at=job.next_run_time.timestamp() if job.next_run_time else 0.0,
-                message=f"Schedule set successfully: {request.cron_expression}"
-            )
-        except ValueError as ve:
-            logger.error(f"CRON or JSON parameter error: {str(ve)}")
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"Parameter error: {str(ve)}")
-        except Exception as e:
-            logger.error(f"Schedule Pipeline Failed: {str(e)}", exc_info=True)
-            context.abort(grpc.StatusCode.INTERNAL, str(e))
 
 def serve():
     instance = FeaturePipelineAPI()

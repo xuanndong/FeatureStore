@@ -99,22 +99,6 @@ message RunResponse {
 }
 
 
-// Schedule Flow
-message ScheduleRequest {
-    RunRequest run_config = 1;
-
-    // config
-    string cron_expression = 2; // Ex: "0 12 * * *"
-    bool is_active = 3; // pause/resume
-}
-
-message ScheduleResponse {
-    string job_id = 1; // feature_group_id
-    double next_run_at = 2; // Unix timestamp
-    string message = 3; // Information
-}
-
-
 // Service Interface
 service PipelineService {
     // Quick Formula Test & UI Data Preview
@@ -122,7 +106,4 @@ service PipelineService {
 
     // Persists files to Feature Storage and pushes data to Redis
     rpc RunBatchPipeline (RunRequest) returns (RunResponse);
-
-    // Schedule automation
-    rpc ScheduleBatchPipeline (ScheduleRequest) returns (ScheduleResponse);
 }
