@@ -11,7 +11,7 @@ from common.database.models import Entity, DataSource
 from services.photon.schemas.registry import EntityCreate, EntityRead, DataSourceCreate, DataSourceRead, EntityUpdate, DataSourceUpdate, ConnectionTestRequest, OptionRead
 from services.photon.core.responses import StandardResponse
 from services.photon.core.dependencies import verify_api_version, PaginationParams
-from AetherFS.services.photon.core.utils import verify_connection
+from services.photon.core.utils import verify_connection
 from common.database.connection import get_session
 
 
@@ -76,6 +76,20 @@ async def list_entities(
             "pagination": pagination.get_metadata(total)
         }
     )
+
+
+@router.get("/entities/options", response_model=StandardResponse[list[OptionRead]])
+async def get_entity_options(
+    db: AsyncSession = Depends(get_session),
+    version: str = Depends(verify_api_version)
+):
+    """
+    Fetch lightweight entity list for UI dropdowns
+    """
+    result = await db.execute(select(Entity.id, Entity.name).order_by(Entity.name))
+    options = [{"id": row.id, "name": row.name} for row in result.all()]
+
+    return StandardResponse(data=options)
 
 
 @router.patch("/entities/{id}", response_model=StandardResponse[EntityRead])
@@ -159,20 +173,6 @@ async def delete_entity(
     )
 
 
-@router.get("/entities/options", response_model=StandardResponse[list[OptionRead]])
-async def get_entity_options(
-    db: AsyncSession = Depends(get_session),
-    version: str = Depends(verify_api_version)
-):
-    """
-    Fetch lightweight entity list for UI dropdowns
-    """
-    result = await db.execute(select(Entity.id, Entity.name).order_by(Entity.name))
-    options = [{"id": row.id, "name": row.name} for row in result.all()]
-
-    return StandardResponse(data=options)
-
-
 # --- Data source ---
 @router.post("/data-sources", response_model=StandardResponse[DataSourceRead])
 async def create_data_source(
@@ -248,8 +248,47 @@ async def list_data_sources(
     )
 
 
+@router.get("/data-sources/options", response_model=StandardResponse[list[OptionRead]])
+async def get_data_source_options(
+    db: AsyncSession = Depends(get_session),
+    version: str = Depends(verify_api_version)
+):
+    """
+    Fetch lightweight data source list for UI dropdowns
+    """
+    result = await db.execute(select(DataSource.id, DataSource.name).order_by(DataSource.name))
+    options = [{"id": row.id, "name": row.name} for row in result.all()]
+
+    return StandardResponse(data=options)
+
+
+@router.post("/data-sources/connection", response_model=StandardResponse[dict])
+async def test_connection(
+    payload: ConnectionTestRequest,
+    version: str = Depends(verify_api_version)
+):
+    """
+    Validate data source integrity
+    """
+    is_ok, message = await verify_connection(
+        uri=payload.location_uri,
+        options=payload.connection_options
+    )
+
+    if not is_ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+
+    return StandardResponse(
+        detail=message,
+        data=payload.location_uri
+    )
+
+
 @router.patch("/data-sources/{id}", response_model=StandardResponse[DataSourceRead])
-async def update_entity(
+async def update_data_source(
     id: UUID,
     payload: DataSourceUpdate,
     db: AsyncSession = Depends(get_session),
@@ -309,7 +348,7 @@ async def get_data_source_detail(
 
 
 @router.delete("/data-sources/{id}", response_model=StandardResponse[None])
-async def delete_entity(
+async def delete_data_source(
     id: UUID,
     db: AsyncSession = Depends(get_session),
     version: str = Depends(verify_api_version)
@@ -326,43 +365,4 @@ async def delete_entity(
 
     return StandardResponse(
         detail="Data source deleted successfully"
-    )
-
-
-@router.get("/data-sources/options", response_model=StandardResponse[list[OptionRead]])
-async def get_data_source_options(
-    db: AsyncSession = Depends(get_session),
-    version: str = Depends(verify_api_version)
-):
-    """
-    Fetch lightweight data source list for UI dropdowns
-    """
-    result = await db.execute(select(DataSource.id, DataSource.name).order_by(DataSource.name))
-    options = [{"id": row.id, "name": row.name} for row in result.all()]
-
-    return StandardResponse(data=options)
-
-
-@router.post("/data-sources/connection", response_model=StandardResponse[dict])
-async def test_connection(
-    payload: ConnectionTestRequest,
-    version: str = Depends(verify_api_version)
-):
-    """
-    Validate data source integrity
-    """
-    is_ok, message = await verify_connection(
-        uri=payload.location_uri,
-        options=payload.connection_options
-    )
-
-    if not is_ok:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
-
-    return StandardResponse(
-        detail=message,
-        data=payload.location_uri
     )

@@ -13,10 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.
 # Third party Libraries
 import grpc
 from grpc_reflection.v1alpha import reflection
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.executors.pool import ThreadPoolExecutor
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.date import DateTrigger
+import ray
 
 # Generated Proto files
 from common.grpc import featurePipeline_pb2 as pb2
@@ -33,24 +30,31 @@ from core import webhook
 logger = logging.getLogger(__name__)
 
 
+@ray.remote
+def execute_pipeline_in_background(kwargs: dict, feature_group_id: str, webhook_url: str):
+    """
+    Execute task on an idle ray cluster worker
+    """
+    try:
+        webhook.report_status(webhook_url, feature_group_id, Materialization.RUNNING.value, "Pipeline is currently running")
+
+        # Init runner
+        runner = BatchPipelineRunner()
+        saved_metadata = runner.run(**kwargs)
+
+        # Update status
+        msg = f"Successfully processed {len(saved_metadata)} datasets"
+        webhook.report_status(webhook_url, feature_group_id, Materialization.COMPLETED.value, msg)
+    except Exception as e:
+        worker_logger = logging.getLogger(__name__)
+        worker_logger.error(f"Data processing error for {feature_group_id}: {str(e)}")
+        webhook.report_status(webhook_url, feature_group_id, Materialization.FAILED.value, f"Error: {str(e)}")
+
+
 class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
     def __init__(self):
         self.runner = BatchPipelineRunner()
-
-        executors = {
-            'default': ThreadPoolExecutor(max_workers=settings.AETHER_MAX_WORKERS) 
-        }
-
-        job_defaults = {
-            'coalesce': True,
-            'max_instances': 1
-        }
-
-        # Schedule
-        self.scheduler = BackgroundScheduler(executors=executors, job_defaults=job_defaults)
-        self.scheduler.start()
-
-        logger.info(f"Background Scheduler initialized with max_workers={settings.AETHER_MAX_WORKERS}. Ready for heavy loads!")
+        logger.info("gRPC API Initialized. Ready to dispatch tasks to Cluster!")
 
     def _parse_json_safe(self, json_str: str):
         if not json_str:
@@ -126,18 +130,6 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             "time_to_live": run_req.time_to_live if run_req.HasField('time_to_live') else None
         }
 
-    def _background_pipeline_task(self, kwargs, feature_group_id, webhook_url):
-        try:
-            webhook.report_status(webhook_url, feature_group_id, Materialization.RUNNING.value, "Pipeline is currently running")
-
-            saved_metadata = self.runner.run(**kwargs)
-
-            msg = f"Successfully processed {len(saved_metadata)} datasets"
-            webhook.report_status(webhook_url, feature_group_id, Materialization.COMPLETED.value, msg)
-        except Exception as e:
-            logger.error(f"Data processing error for {feature_group_id}: {str(e)}")
-            webhook.report_status(webhook_url, feature_group_id, Materialization.FAILED.value, f"Error: {str(e)}")
-
     def PreviewFeatureGroup(self, request, context):
         logger.info(f"Received Preview request for URI: {request.location_uri}")
         try:
@@ -176,22 +168,18 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
         logger.info(f"Received Run request for Feature Group: {request.feature_group_id}")
         try:
             kwargs = self._build_run_kwargs(request)
-
             webhook_url = request.webhook_url if request.HasField("webhook_url") else ""
-            run_job_id = f"run_{request.feature_group_id}"
 
-            self.scheduler.add_job(
-                func=self._background_pipeline_task,
-                trigger=DateTrigger(run_date=datetime.now()), 
-                args=[kwargs, request.feature_group_id, webhook_url],
-                id=run_job_id,
-                replace_existing=True
+            execute_pipeline_in_background.remote(
+                kwargs=kwargs,
+                feature_group_id=request.feature_group_id,
+                webhook_url=webhook_url
             )
 
             return pb2.RunResponse(
                 feature_group_id=request.feature_group_id,
                 status=Materialization.PENDING.value,
-                message="Process is running in the background"
+                message="Process submitted to Cluster"
             )
         except Exception as e:
             logger.error(f"Run Pipeline Submission Failed: {str(e)}", exc_info=True)

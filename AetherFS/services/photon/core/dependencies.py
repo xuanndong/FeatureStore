@@ -1,5 +1,6 @@
 # Third party Libraries
-from fastapi import Header, HTTPException, status, Query
+from fastapi import Header, HTTPException, status, Query, Request
+import redis.asyncio as aioredis
 
 
 async def verify_api_version(x_api_version: str = Header(default="v1.0.0")):
@@ -14,6 +15,13 @@ async def verify_api_version(x_api_version: str = Header(default="v1.0.0")):
         )
 
     return x_api_version
+
+
+async def get_redis(request: Request) -> aioredis.Redis:
+    """
+    Get redis from app
+    """
+    return request.app.state.redis
 
 
 class PaginationParams:

@@ -73,6 +73,9 @@ class FeatureGroupCreate(BaseModel):
         # Validate scheduling
         if self.is_scheduled and not self.cron_expression:
             raise ValueError("'cron_expression' is required when scheduling is enabled")
+            
+        if not self.is_scheduled:
+            self.cron_expression = None
 
         return self
 
@@ -105,13 +108,17 @@ class FeatureGroupRead(BaseModel):
 
 class FeatureGroupUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
+    status: FeatureGroupStatus | None = None
     is_scheduled: bool | None = None
     cron_expression: ScheduleInterval | None = None
 
     @model_validator(mode='after')
     def validate_schedule(self) -> 'FeatureGroupUpdate':
         # Enabling a schedule requires a cron expression
-        if self.is_scheduled is True and not self.cron_expression:
+        if not self.is_scheduled and not self.cron_expression:
             raise ValueError("cron_expression' is required when 'is_scheduled' is enabled")
+
+        if not self.is_scheduled:
+            self.cron_expression = None
 
         return self

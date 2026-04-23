@@ -13,6 +13,7 @@ import grpc
 from common.database.models import DataSource, FeatureGroup, Transformation, Entity, Feature
 from common.database.connection import get_session
 from common.grpc import featurePipeline_pb2 as pb2
+from common.constants import Materialization, FeatureGroupStatus
 from common.config import settings
 from services.photon.schemas.studio import FeatureGroupCreate, PreviewRunRequest, StatusPayload, FeatureGroupRead, FeatureGroupUpdate
 from services.photon.core.responses import StandardResponse
@@ -290,6 +291,10 @@ async def update_pipeline_status(
         fg.last_run_status = payload.status
         fg.updated_at = datetime.now(timezone.utc).timestamp()
 
+        if payload.status == Materialization.FAILED.value:
+            fg.is_scheduled = False
+            fg.next_run_at = None
+
         await db.commit()
 
         # Websocket
@@ -385,19 +390,40 @@ async def update_feature_group(
             data={"id": str(fg.id)}
         )
 
+    future_is_scheduled = update_data.get("is_scheduled", fg.is_scheduled)
+    future_status = update_data.get("status", fg.status)
+
+    if future_is_scheduled:
+        if fg.last_run_status == Materialization.FAILED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to enable scheduling: The last run failed. Please check your configuration"
+            )
+
+        if future_status in [FeatureGroupStatus.DEPRECATED, FeatureGroupStatus.INACTIVE]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to enable scheduling: Feature Group is currently inactive"
+            )
+
     for key, value in update_data.items():
         setattr(fg, key, value)
 
     if fg.is_scheduled and fg.cron_expression:
         fg.next_run_at = calculate_next_run(fg.cron_expression)
     else:
+        fg.is_scheduled = False
         fg.next_run_at = None
 
     await db.commit()
 
     return StandardResponse(
         detail="Update feature group successfully",
-        data={"id": str(fg.id), "next_run_at": fg.next_run_at}
+        data={
+            "id": str(fg.id),
+            "is_scheduled": fg.is_scheduled,
+            "next_run_at": fg.next_run_at
+        }
     )
 
 
