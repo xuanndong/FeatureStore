@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+
+  <link rel="icon" type="image/svg+xml" href="src/assets/logo.svg" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aether Platform — Feature Store</title>
+  <meta name="description"
+    content="Aether Platform — Comprehensive MLOps solution for managing, transforming, and serving feature data for machine learning models." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    body {
+      margin: 0;
+      background-color: #0f111a;
+    }
+
+    @keyframes pulse {
+      0% {
+        opacity: 0.6;
+        transform: scale(0.95);
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.05);
+      }
+
+      100% {
+        opacity: 0.6;
+        transform: scale(0.95);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root">
+    <div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+      <img src="src/assets/logo.svg" alt="Aether Platform Loading..."
+        style="width: 80px; height: auto; animation: pulse 1.5s ease-in-out infinite;" />
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
