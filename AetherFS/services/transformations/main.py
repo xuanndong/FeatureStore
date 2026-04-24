@@ -211,8 +211,6 @@ def serve():
         logger.info("Shutdown system")
         server.stop(5).wait()
 
-        if instance.scheduler.running:
-            instance.scheduler.shutdown(wait=False)
 
 if __name__ == "__main__":
     import builtins
