@@ -94,10 +94,10 @@ class FeatureGroupRead(BaseModel):
 
     is_scheduled: bool
     cron_expression: ScheduleInterval | None
-    next_run_at: float
+    next_run_at: float | None
 
-    updated_at: float
-    created_at: float
+    updated_at: float | None
+    created_at: float | None
 
     entity_id: UUID
     source_id: UUID

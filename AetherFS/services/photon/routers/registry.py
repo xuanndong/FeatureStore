@@ -62,7 +62,7 @@ async def list_entities(
     if search:
         query = query.where(Entity.name.ilike(f"%{search}%") | Entity.join_key.ilike(f"%{search}%"))
 
-    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    total = (await db.execute(select(func.count(Entity.id)).select_from(Entity))).scalar() or 0
 
     result = await db.execute(
         query.order_by(Entity.created_at.desc()).offset(pagination.offset).limit(pagination.limit)
@@ -232,7 +232,7 @@ async def list_data_sources(
     if search:
         query = query.where(DataSource.name.ilike(f"%{search}%"))
 
-    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    total = (await db.execute(select(func.count(DataSource.id)).select_from(DataSource))).scalar() or 0
 
     result = await db.execute(
         query.order_by(DataSource.created_at.desc()).offset(pagination.offset).limit(pagination.limit)
@@ -283,7 +283,7 @@ async def test_connection(
 
     return StandardResponse(
         detail=message,
-        data=payload.location_uri
+        data={"status": is_ok}
     )
 
 

@@ -7,12 +7,13 @@ import ray
 from ray.exceptions import RayTaskError
 import pyarrow as pa
 from pyarrow import dataset as ds
+from pyarrow import csv as pacsv
 
 # Local Libraries
 from services.transformations.core.storage import FsspecClient
 from services.transformations.materializers.offlineStore import OfflineStore
-from services.transformations.core.wrapper import UDFEngine, RedisIngestion
-from common.constants import UDFConstants, RayConfig, VirtualDataset, SourceFormat, DatasetConfig
+from services.transformations.core.wrapper import UDFEngine, RedisIngestion, find_udf_class_name
+from common.constants import RayConfig, VirtualDataset, SourceFormat, DatasetConfig
 from common.config import settings
 
 
@@ -81,6 +82,8 @@ class RayBased:
         if not datasets_to_process:
             raise ValueError("Empty dataset mapping")
 
+        detected_class = find_udf_class_name(udf_code)
+
         remote_args = {RayConfig.RUNTIME_ENV_KEY: {RayConfig.PIP_KEY: requirements}} if requirements else {}
         preview_results = {}
 
@@ -98,7 +101,7 @@ class RayBased:
             try:
                 transformed = ray_dataset.map_batches(
                     UDFEngine,
-                    fn_constructor_kwargs={"udf_code": udf_code, "class_name": UDFConstants.DEFAULT_CLASS_NAME, "dataset_name": ds_name},
+                    fn_constructor_kwargs={"udf_code": udf_code, "class_name": detected_class, "dataset_name": ds_name},
                     batch_size=limit,
                     compute=ray.data.ActorPoolStrategy(size=1),
                     **remote_args
@@ -110,7 +113,7 @@ class RayBased:
 
         return preview_results
 
-    def execute_udf_structure(self, dataset: ds.Dataset | dict[str, ds.Dataset], udf_code: str, output_uri: str, time_to_live: int, target_datasets: list[str] | None = None, requirements: list[str] | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
+    def execute_udf_structure(self, dataset: ds.Dataset | dict[str, ds.Dataset], location_uri: str, udf_code: str, output_uri: str, source_format: SourceFormat, time_to_live: int, target_datasets: list[str] | None = None, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
         """
         Executes the UDF across the entire dataset and writes the output to storage
         """
@@ -118,7 +121,12 @@ class RayBased:
         if not datasets_to_process:
             raise ValueError("Empty dataset mapping")
 
+        detected_class = find_udf_class_name(udf_code)
+
         remote_args = {RayConfig.RUNTIME_ENV_KEY: {RayConfig.PIP_KEY: requirements}} if requirements else {}
+
+        client = FsspecClient(location_uri, connection_options)
+        fs = client.get_raw_fs()
 
         saved_paths = {}
         offline_store = OfflineStore()
@@ -128,12 +136,29 @@ class RayBased:
                 continue
 
             try:
-                ray_dataset = ray.data.from_arrow(data)
+                file_paths = data.files
+
+                match source_format:
+                    case SourceFormat.CSV:
+                        parse_options = pacsv.ParseOptions(newlines_in_values=True)
+                        ray_dataset = ray.data.read_csv(
+                            file_paths, 
+                            filesystem=fs, 
+                            parse_options=parse_options
+                        )
+                    case SourceFormat.PARQUET:
+                        ray_dataset = ray.data.read_parquet(file_paths, filesystem=fs)
+                    case SourceFormat.JSON:
+                        ray_dataset = ray.data.read_json(file_paths, filesystem=fs)
+                    case _:
+                        logger.warning(f"Fallback to from_arrow for format {source_format}")
+                        ray_dataset = ray.data.from_arrow(data.to_table())
 
                 transformed = ray_dataset.map_batches(
                     UDFEngine,
-                    fn_constructor_kwargs={"udf_code": udf_code, "class_name": UDFConstants.DEFAULT_CLASS_NAME, "dataset_name": ds_name},
+                    fn_constructor_kwargs={"udf_code": udf_code, "class_name": detected_class, "dataset_name": ds_name},
                     compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2),
+                    batch_format="pyarrow",
                     **remote_args
                 )
 
@@ -142,7 +167,7 @@ class RayBased:
                         RedisIngestion,
                         fn_constructor_kwargs={"feature_group": ds_name, "entity_keys": entity_keys, "time_to_live": time_to_live},
                         batch_format="pyarrow",
-                        compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2)
+                        compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2),
                     )
 
                 final_uri = offline_store.save_ray_dataset(dataset=transformed, output_uri=output_uri, dataset_name=ds_name)
@@ -165,13 +190,14 @@ class RayBased:
         sample_paths = [p.replace(scheme_prefix, "") for p in dataset[:limit]] if scheme_prefix else dataset[:limit]
         ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED.value
 
+        detected_class = find_udf_class_name(udf_code)
 
         full_sample_uris = dataset[:limit]
         fs = client.get_raw_fs()
 
         fn_kwargs = {
-            "udf_code": udf_code, 
-            "class_name": UDFConstants.DEFAULT_CLASS_NAME, 
+            "udf_code": udf_code,
+            "class_name": detected_class,
             "dataset_name": ds_name
         }
 
@@ -221,11 +247,13 @@ class RayBased:
         clean_paths = [p.replace(scheme_prefix, "") for p in dataset] if scheme_prefix else dataset
         ds_name = os.path.basename(location_uri.strip("/")) or VirtualDataset.DEFAULT_UNSTRUCTURED.value
 
+        detected_class = find_udf_class_name(udf_code)
+
         fs = client.get_raw_fs()
 
         fn_kwargs = {
-            "udf_code": udf_code, 
-            "class_name": UDFConstants.DEFAULT_CLASS_NAME, 
+            "udf_code": udf_code,
+            "class_name": detected_class,
             "dataset_name": ds_name
         }
 
@@ -309,11 +337,14 @@ class RayBased:
         elif isinstance(dataset, (ds.Dataset, dict)):
             return self.execute_udf_structure(
                 dataset=dataset,
+                location_uri=location_uri,
                 udf_code=udf_code,
                 output_uri=output_uri,
+                source_format=source_format,
                 time_to_live=time_to_live,
                 target_datasets=target_datasets,
                 requirements=requirements,
+                connection_options=connection_options,
                 entity_keys=entity_keys,
                 sync_online=sync_online
             )

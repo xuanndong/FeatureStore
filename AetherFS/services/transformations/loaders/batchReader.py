@@ -8,7 +8,7 @@ from common.constants import SourceFormat, ReadPolicies, VirtualTable, DatasetCo
 
 # Third party Libraries
 from pyarrow import dataset as ds
-
+from pyarrow import csv as pacsv
 
 # Logs
 logger = logging.getLogger(__name__)
@@ -19,11 +19,34 @@ class BatchReader:
         """
         Initialize
         """
-        self.tabular_formats = {
-            SourceFormat.CSV: "csv",
-            SourceFormat.PARQUET: "parquet",
-            SourceFormat.JSON: "json"
+        self.supported_tabular = {
+            SourceFormat.CSV, 
+            SourceFormat.PARQUET, 
+            SourceFormat.JSON, 
+            SourceFormat.AVRO
         }
+
+    def _get_dataset_format(self, source_format: SourceFormat):
+        """
+        Format Object of PyArrow
+        """
+        match source_format:
+            case SourceFormat.CSV:
+                return ds.CsvFileFormat(
+                    parse_options=pacsv.ParseOptions(newlines_in_values=True)
+                )
+
+            case SourceFormat.PARQUET:
+                return ds.ParquetFileFormat()
+
+            case SourceFormat.JSON:
+                return ds.JsonFileFormat()
+
+            case SourceFormat.AVRO:
+                return ds.IpcFileFormat()
+
+            case _:
+                return ds.ParquetFileFormat()
 
     def load_data(
         self, 
@@ -60,8 +83,8 @@ class BatchReader:
         if not valid_files:
             return None
 
-        if source_format in self.tabular_formats:
-            pyarrow_fmt = self.tabular_formats[source_format]
+        if source_format in self.supported_tabular:
+            pyarrow_fmt = self._get_dataset_format(source_format)
             raw_fs = storage.get_raw_fs()
 
             # Parse prefix

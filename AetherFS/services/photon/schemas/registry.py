@@ -2,7 +2,7 @@
 from uuid import UUID
 
 # Third party Libraries
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # Local Libraries
 from common.constants import SourceFormat, SourceType
@@ -20,8 +20,10 @@ class EntityRead(BaseModel):
     name: str
     join_key: str
     description: str | None
-    updated_at: float
-    created_at: float
+    updated_at: float | None
+    created_at: float | None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EntityUpdate(BaseModel):
@@ -47,6 +49,8 @@ class DataSourceRead(BaseModel):
     connection_status: bool
     updated_at: float
     created_at: float
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DataSourceUpdate(BaseModel):

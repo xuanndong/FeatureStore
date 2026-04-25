@@ -82,7 +82,7 @@ class VirtualDataset(str, Enum):
 
 
 class UDFConstants:
-    DEFAULT_CLASS_NAME = "UDFProcessor"
+    DEFAULT_CLASS_NAME = "class_name"
     REQUIRED_METHOD = "__call__"
     REQUIRED_INIT_PARAM = "dataset_name"
 

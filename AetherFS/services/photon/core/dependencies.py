@@ -1,3 +1,6 @@
+# Standard Libraries
+import math
+
 # Third party Libraries
 from fastapi import Header, HTTPException, status, Query, Request
 import redis.asyncio as aioredis
@@ -36,11 +39,9 @@ class PaginationParams:
         self.limit = page_size
 
     def get_metadata(self, total_items: int) -> dict:
-        import math
-
         return {
             "current_page": self.page,
             "page_size": self.page_size,
             "total_items": total_items,
-            "total pages": math.ceil(total_items / self.page_size)
+            "total_pages": math.ceil(total_items / self.page_size)
         }

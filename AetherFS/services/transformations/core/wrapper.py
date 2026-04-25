@@ -1,8 +1,10 @@
 # Standard Libraries
 import logging
+import ast
 
 # Third party Libraries
 import pyarrow as pa
+import pandas as pd
 
 # Local Libraries
 from common.constants import UDFConstants
@@ -13,6 +15,24 @@ from services.transformations.core.storage import FsspecClient
 logger = logging.getLogger(__name__)
 
 
+def find_udf_class_name(code_str: str) -> str | None:
+    """
+    Find class
+    """
+    try:
+        tree = ast.parse(code_str)
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+
+            # Check __call__ method in class
+            if any(isinstance(n, ast.FunctionDef) and n.name == "__call__" for n in node.body):
+                return node.name
+    except Exception:
+        pass
+
+    return None
+
 class UDFEngine:
     """
     A dynamic engine that compiles and executes User-Defined Function (UDF) classes from source code strings
@@ -21,6 +41,9 @@ class UDFEngine:
         self.dataset_name = dataset_name
         self.connection_options = connection_options
         self.udf_instance = None
+
+        detected_name = find_udf_class_name(udf_code)
+        self.target_class_name = detected_name or class_name
 
         namespace = {}
 
@@ -33,46 +56,65 @@ class UDFEngine:
             logger.error("Compile error in UDF: %s", e)
             raise RuntimeError(f"Compile error: {e}")
 
-        self.udf_class = namespace.get(class_name)
+        self.udf_class = namespace.get(self.target_class_name)
         if not self.udf_class:
-            raise ValueError(f"The code must contain a class named: '{class_name}'")
+            raise ValueError(f"Class '{self.target_class_name}' not found in code")
 
         if not hasattr(self.udf_class, UDFConstants.REQUIRED_METHOD):
-            raise ValueError(f"Class '{class_name}' must implement '{UDFConstants.REQUIRED_METHOD}(self, batch)'")
+            raise ValueError(f"Class '{self.target_class_name}' must implement '{UDFConstants.REQUIRED_METHOD}'")
+
+    def _init_instance(self, batch):
+        """
+        Init instance of UDF class
+        """
+        init_kwargs = {"dataset_name": self.dataset_name}
+
+        first_path = None
+        if isinstance(batch, dict) and batch.get("path") and len(batch["path"]) > 0:
+            first_path = str(batch["path"][0])
+
+        if first_path:
+            client = FsspecClient(first_path, self.connection_options)
+            init_kwargs["fs"] = client.get_raw_fs()
+
+        try:
+            self.udf_instance = self.udf_class(**init_kwargs)
+        except TypeError as e:
+            if "fs" not in str(e): 
+                raise ValueError(f"Initialization error: {e}")
+
+            init_kwargs.pop("fs", None)
+            self.udf_instance = self.udf_class(**init_kwargs)
+            logger.info("UDF '%s' initialized without 'fs' context.", self.target_class_name)
 
     def __call__(self, batch):
         if self.udf_instance is None:
-            init_kwargs = {"dataset_name": self.dataset_name}
-            first_path = None
+            self._init_instance(batch)
 
-            # Extract first path from the batch
-            try:
-                if isinstance(batch, dict) and "path" in batch and len(batch["path"]) > 0:
-                    first_path = str(batch["path"][0])
-            except Exception as e:
-                logger.error("Failed to extract 'path' from batch: %s", e)
+            if self.udf_instance is None:
+                raise RuntimeError(f"Could not initialize class '{self.target_class_name}'. Please check the UDF's __init__ method")
 
-            # Prepare FileSystem if path exists
-            if first_path:
-                fs_client = FsspecClient(first_path, self.connection_options)
-                init_kwargs["fs"] = fs_client.get_raw_fs()
-
-            # EAFP Initialization
-            try:
-                self.udf_instance = self.udf_class(**init_kwargs)
-            except TypeError as e:
-                if "fs" in init_kwargs and "fs" in str(e):
-                    logger.info("UDF '%s' does not accept 'fs'. Re-initializing without it.", self.udf_class.__name__)
-                    init_kwargs.pop("fs")
-                    self.udf_instance = self.udf_class(**init_kwargs)
-                else:
-                    raise ValueError(f"Error initializing class '{self.udf_class.__name__}': {e}")
-            except Exception as e:
-                logger.error("Failed to initialize user UDF class: %s", e)
-                raise ValueError(f"Error initializing class '{self.udf_class.__name__}': {e}")
+        if isinstance(batch, pa.Table):
+            safe_batch = batch.to_pandas()
+        elif isinstance(batch, dict):
+            safe_batch = pd.DataFrame(batch)
+        elif isinstance(batch, pd.DataFrame):
+            safe_batch = batch
+        else:
+            safe_batch = batch
 
         # Execute Transformation
-        return self.udf_instance(batch)
+        try:
+            method_name = UDFConstants.REQUIRED_METHOD
+            method_to_call = getattr(self.udf_instance, method_name, None)
+
+            if method_to_call is None or not callable(method_to_call):
+                raise AttributeError(f"Class '{self.target_class_name}' is missing or has a corrupted '{method_name}()' method")
+
+            return self.udf_instance(safe_batch)
+        except Exception as e:
+            logger.error(f"UDF logic error '{self.target_class_name}': {str(e)}")
+            raise RuntimeError(f"Error when executing code: {str(e)}") from e
 
 
 class RedisIngestion:

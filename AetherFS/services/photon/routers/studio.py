@@ -65,8 +65,11 @@ async def preview_transformation(
         connection_options_json = json.dumps(cfg.connection_options) if cfg.connection_options else ""
 
     # Mapping enum
-    proto_source_format = getattr(pb2.SourceFormat, source_format.name)
-    proto_transform_type = getattr(pb2.TransformationType, payload.transform_type.name)
+    format_name = source_format.name if hasattr(source_format, 'name') else str(source_format).upper()
+    transform_name = payload.transform_type.name if hasattr(payload.transform_type, 'name') else str(payload.transform_type).upper()
+
+    proto_source_format = getattr(pb2.SourceFormat, format_name)
+    proto_transform_type = getattr(pb2.TransformationType, transform_name)
 
     # gRPC request
     grpc_req = pb2.PreviewRequest(
@@ -224,8 +227,11 @@ async def create_feature_group(
                 db.add(new_feature)
 
         # Setup gRPC scheduling
-        proto_source_format = getattr(pb2.SourceFormat, source_format.name)
-        proto_transform_type = getattr(pb2.TransformationType, payload.transform_type.name)
+        source_name = source_format.name if hasattr(source_format, 'name') else str(source_format).upper()
+        transform_name = payload.transform_type.name if hasattr(payload.transform_type, 'name') else str(payload.transform_type).upper()
+
+        proto_source_format = getattr(pb2.SourceFormat, source_name)
+        proto_transform_type = getattr(pb2.TransformationType, transform_name)
 
         run_req = pb2.RunRequest(
             location_uri=location_uri,
@@ -342,8 +348,7 @@ async def list_feature_groups(
     if execution_status:
         query = query.where(FeatureGroup.last_run_status == execution_status)
 
-    total_query = select(func.count()).select_from(query.subquery())
-    total = (await db.execute(total_query)).scalar_one()
+    total = (await db.execute(select(func.count(FeatureGroup.id)).select_from(FeatureGroup))).scalar() or 0
 
     result = await db.execute(
         query.order_by(FeatureGroup.created_at.desc()).offset(pagination.offset).limit(pagination.limit)
