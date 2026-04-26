@@ -12,7 +12,7 @@ export const HeroBanner: React.FC = () => {
         position: 'relative',
         overflow: 'hidden',
         boxShadow: 'var(--shadow-md)',
-        marginBottom: '2rem'
+        marginBottom: '1rem'
       }}
     >
       {/* Background decoration */}
@@ -58,7 +58,7 @@ export const HeroBanner: React.FC = () => {
         <p
           style={{
             fontSize: 'clamp(1rem, 2vw, 1.06rem)',
-            marginTop: '3rem',
+            marginTop: '1rem',
             opacity: 0.9,
             lineHeight: 1.6,
           }}

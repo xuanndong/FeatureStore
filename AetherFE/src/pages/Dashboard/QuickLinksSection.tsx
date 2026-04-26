@@ -14,7 +14,7 @@ export const QuickLinksSection: React.FC<QuickLinksGridProps> = ({ items, onNavi
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '3rem',
+          marginBottom: '2rem',
           flexWrap: 'wrap',
           gap: '0.75rem',
         }}

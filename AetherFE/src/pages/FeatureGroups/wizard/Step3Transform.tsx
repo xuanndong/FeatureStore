@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Editor from '@monaco-editor/react';
+import { X, Box, Package } from 'lucide-react';
 import type { TransformationType, WizardTransformStep, SourceFormat } from '@/types';
 
 // ==========================================
@@ -128,20 +129,34 @@ FROM source_data;`,
 -- Vui lòng sử dụng SQL hoặc Python UDF`
 };
 
+
+// List Libraries
+const STANDARD_LIBS = ['pandas', 'numpy', 'scikit-learn', 'scipy', 'pyarrow'];
+
 // ==========================================
 // COMPONENT
 // ==========================================
 interface Step3TransformProps {
-  transformStep: WizardTransformStep;
+  transformStep: WizardTransformStep & {
+    requirements?: string[];
+    model_id?: string;
+  };
+  availableModels?: { id: string; name: string }[];
   sourceFormat?: SourceFormat; 
   isPreviewing: boolean;
-  onStepChange: (step: WizardTransformStep) => void;
+  onStepChange: (step: any) => void;
   onRunScript: () => void;
 }
 
 export const Step3Transform: React.FC<Step3TransformProps> = React.memo(({
-  transformStep, sourceFormat = 'PARQUET', isPreviewing, onStepChange, onRunScript
+  transformStep, 
+  sourceFormat = 'PARQUET', 
+  availableModels = [],
+  isPreviewing, 
+  onStepChange, 
+  onRunScript
 }) => {
+  const [reqInput, setReqInput] = useState('');
 
   const getTemplate = (type: TransformationType, format: SourceFormat) => {
     if (type === 'SQL') return TEMPLATES.SQL;
@@ -151,7 +166,6 @@ export const Step3Transform: React.FC<Step3TransformProps> = React.memo(({
     if (format === 'VIDEO') return TEMPLATES.VIDEO;
     if (format === 'AUDIO') return TEMPLATES.AUDIO;
     if (format === 'TEXT') return TEMPLATES.TEXT;
-    
     return TEMPLATES.STRUCTURED;
   };
 
@@ -173,9 +187,34 @@ export const Step3Transform: React.FC<Step3TransformProps> = React.memo(({
     });
   };
 
+  // --- Handlers cho Requirements ---
+  const handleAddRequirement = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && reqInput.trim()) {
+      e.preventDefault();
+      const currentReqs = transformStep.requirements || [];
+      if (!currentReqs.includes(reqInput.trim())) {
+        onStepChange({
+          ...transformStep,
+          requirements: [...currentReqs, reqInput.trim()]
+        });
+      }
+      setReqInput('');
+    }
+  };
+
+  const handleRemoveRequirement = (reqToRemove: string) => {
+    const currentReqs = transformStep.requirements || [];
+    onStepChange({
+      ...transformStep,
+      requirements: currentReqs.filter(r => r !== reqToRemove)
+    });
+  };
+
   return (
-    <div className="wizard-step3-grid">
-      <div style={{ height: '400px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+    <div className="wizard-step3-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+      
+      {/* EDITOR */}
+      <div style={{ height: '600px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
         <Editor
           height="100%"
           language={transformStep.transform_type === 'SQL' ? 'sql' : 'python'}
@@ -186,9 +225,11 @@ export const Step3Transform: React.FC<Step3TransformProps> = React.memo(({
         />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* CONTROLS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', paddingRight: '4px', maxHeight: '600px' }}>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '9rem' }}>
+        {/* Run & Reset */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <button
             className="btn btn-secondary"
             style={{ width: '100%', justifyContent: 'center', background: '#7c3aed', color: 'white', border: 'none' }}
@@ -202,11 +243,19 @@ export const Step3Transform: React.FC<Step3TransformProps> = React.memo(({
             className="btn btn-reset"
             onClick={handleResetTemplate}
             title="Tải lại code mẫu mặc định"
+            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
           >
             ↺ Khôi phục code mẫu
           </button>
         </div>
 
+        {transformStep.previewOk && (
+          <div style={{ color: '#10b981', fontSize: '13px', fontWeight: 500, textAlign: 'center' }}>✓ Script hợp lệ</div>
+        )}
+
+        <hr style={{ border: 'none', borderTop: '1px solid var(--border)' }} />
+
+        {/* Base Info */}
         <div>
           <label className="form-label">TYPE</label>
           <select
@@ -229,9 +278,87 @@ export const Step3Transform: React.FC<Step3TransformProps> = React.memo(({
           />
         </div>
 
-        {transformStep.previewOk && (
-          <div style={{ color: '#10b981', fontSize: '13px', fontWeight: 500 }}>✓ Script hợp lệ</div>
+        {/* PYTHON_UDF */}
+        {transformStep.transform_type === 'PYTHON_UDF' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeIn 0.3s ease' }}>
+            
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border)' }} />
+            
+            {/* 1. Model Registry */}
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Box size={14} /> MODEL REGISTRY (Tùy chọn)
+              </label>
+              <select
+                className="form-select"
+                value={transformStep.model_id || ''}
+                onChange={(e) => onStepChange({ ...transformStep, model_id: e.target.value })}
+              >
+                <option value="">-- Không sử dụng Model --</option>
+                {availableModels.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+                {availableModels.length === 0 && <option disabled>Chưa có model nào được đăng ký</option>}
+              </select>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                Model sẽ được load tự động vào <code>self.model</code> của Processor.
+              </p>
+            </div>
+
+            {/* 2. Requirements / Libraries */}
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Package size={14} /> PYTHON ENVIRONMENTS
+              </label>
+              
+              <div style={{ background: 'var(--bg-secondary)', padding: '10px', borderRadius: '6px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  THƯ VIỆN CÓ SẴN (BASE IMAGE):
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {STANDARD_LIBS.map(lib => <span key={lib}>{lib}, </span>)}...
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Thêm thư viện (vd: xgboost==2.0.3) -> Enter"
+                  value={reqInput}
+                  onChange={(e) => setReqInput(e.target.value)}
+                  onKeyDown={handleAddRequirement}
+                  style={{ fontSize: '12px' }}
+                />
+              </div>
+              
+              {/* List of user-added requirements */}
+              {(transformStep.requirements && transformStep.requirements.length > 0) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                  {transformStep.requirements.map(req => (
+                    <div 
+                      key={req} 
+                      style={{ 
+                        display: 'flex', alignItems: 'center', gap: '4px', 
+                        background: '#e0e7ff', color: '#4338ca', 
+                        padding: '4px 8px', borderRadius: '16px', fontSize: '12px', fontWeight: 500 
+                      }}
+                    >
+                      {req}
+                      <X 
+                        size={14} 
+                        style={{ cursor: 'pointer', opacity: 0.7 }} 
+                        onClick={() => handleRemoveRequirement(req)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
         )}
+
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Layers, Search, RefreshCcw, Eye } from 'lucide-react';
+import { Layers, Search, Eye, Database, Fingerprint } from 'lucide-react';
 import type { QuickLinkItem } from '@/pages/Dashboard/QuickLinkCard';
 
 export const QUICK_LINKS_DATA: QuickLinkItem[] = [
@@ -9,17 +9,29 @@ export const QUICK_LINKS_DATA: QuickLinkItem[] = [
     path: '/feature-groups',
   },
   {
+    title: 'Data Sources',
+    desc: 'Quản lý các kết nối lưu trữ dữ liệu Batch (S3, Local) và luồng Stream.',
+    icon: Database,
+    path: '/data-sources',
+  },
+  {
+    title: 'Entities',
+    desc: 'Định nghĩa các thực thể logic và khóa liên kết (Join Key) cho mô hình AI.',
+    icon: Fingerprint,
+    path: '/entities',
+  },
+  {
     title: 'Online Explorer',
     desc: 'Truy vấn và kiểm tra dữ liệu đặc trưng trong thời gian thực từ Redis.',
     icon: Search,
     path: '/online-explorer',
   },
-  {
-    title: 'Materialization',
-    desc: 'Đồng bộ hóa dữ liệu giữa các kho lưu trữ offline và online.',
-    icon: RefreshCcw,
-    path: '/materialization',
-  },
+  // {
+  //   title: 'Materialization',
+  //   desc: 'Đồng bộ hóa dữ liệu giữa các kho lưu trữ offline và online.',
+  //   icon: RefreshCcw,
+  //   path: '/materialization',
+  // },
   {
     title: 'Feature Views',
     desc: 'Đóng gói các đặc trưng để sẵn sàng phục vụ cho mô hình AI.',

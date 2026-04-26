@@ -75,19 +75,22 @@ export const CreateFeatureGroupWizard: React.FC = () => {
   );
 
   const handleCheckSource = useCallback(async () => {
-    if (!sourceStep.new_source_config?.location_uri) return;
+    const { new_source_config } = sourceStep;
+    if (!new_source_config?.location_uri) return;
 
     try {
       setIsCheckingSource(true);
       setSourceStep(prev => ({ ...prev, connectionChecked: false, connectionError: null }));
-      
-      await registryApi.testConnection({ location_uri: sourceStep.new_source_config.location_uri });
-      
-      setSourceStep(prev => ({ ...prev, connectionChecked: true }));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Lỗi kết nối';
-      setSourceStep(prev => ({ ...prev, connectionChecked: false, connectionError: message }));
 
+      await registryApi.testConnection({ 
+        location_uri: new_source_config.location_uri,
+        connection_options: new_source_config.connection_options 
+      });
+
+      setSourceStep(prev => ({ ...prev, connectionChecked: true }));
+    } catch (err: any) {
+      const message = err.response?.data?.detail || 'Lỗi kết nối';
+      setSourceStep(prev => ({ ...prev, connectionChecked: false, connectionError: message }));
     } finally {
       setIsCheckingSource(false);
     }
