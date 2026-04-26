@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PaginationProps {
   currentPage: number;
@@ -6,62 +7,108 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
 }
 
-export const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPageChange }) => {
+export const Pagination: React.FC<PaginationProps> = ({ 
+  currentPage, 
+  totalPages,
+  onPageChange 
+}) => {
   if (totalPages <= 1) return null;
 
   const getPages = () => {
-    const pages = [];
-    if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= 4) {
-        pages.push(1, 2, 3, 4, 5, '...', totalPages);
-      } else if (currentPage >= totalPages - 3) {
-        pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-      } else {
-        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-      }
-    }
-    return pages;
+    const range = (start: number, end: number) => {
+      return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    };
+
+    if (totalPages <= 7) return range(1, totalPages);
+    if (currentPage <= 4) return [...range(1, 5), '...', totalPages];
+    if (currentPage >= totalPages - 3) return [1, '...', ...range(totalPages - 4, totalPages)];
+    
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '20px' }}>
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      gap: '8px', 
+      marginTop: '24px',
+      userSelect: 'none'
+    }}>
+      {/* Previous Button */}
       <button
-        className="btn-ghost"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        style={{ fontSize: '13px', padding: '4px 8px', border: 'none' }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '4px',
+          fontSize: '14px', padding: '6px 12px', border: 'none',
+          background: 'transparent', 
+          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+          opacity: currentPage === 1 ? 0.4 : 1,
+          color: 'var(--text-primary)',
+          transition: 'all 0.2s ease',
+        }}
+        onMouseOver={(e) => { if (currentPage !== 1) e.currentTarget.style.color = '#3b82f6'; }}
+        onMouseOut={(e) => { if (currentPage !== 1) e.currentTarget.style.color = 'var(--text-primary)'; }}
       >
-        Trước
+        <ChevronLeft size={16} /> Previous
       </button>
-      <div style={{ display: 'flex', gap: '4px' }}>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
         {getPages().map((page, i) => (
           page === '...' ? (
-            <span key={i} style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>...</span>
+            <span key={`dots-${i}`} style={{ padding: '0 8px', color: 'var(--text-muted)' }}>...</span>
           ) : (
             <button
-              key={i}
+              key={`page-${i}-${page}`}
               onClick={() => onPageChange(page as number)}
               style={{
-                width: '28px', height: '28px', borderRadius: '4px', border: 'none',
-                background: currentPage === page ? 'var(--text-primary)' : 'transparent',
-                color: currentPage === page ? 'var(--bg)' : 'var(--text-primary)',
-                cursor: 'pointer', fontSize: '13px', fontWeight: currentPage === page ? 600 : 400
+                minWidth: '32px', height: '32px',
+                padding: '0 8px',
+                borderRadius: '8px',
+                border: currentPage === page ? '1px solid #e2e8f0' : '1px solid transparent',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: currentPage === page ? 500 : 400,
+                boxShadow: currentPage === page ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                transition: 'all 0.2s ease',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}
+              onMouseOver={(e) => {
+                if (currentPage !== page) e.currentTarget.style.background = '#f1f5f9';
+              }}
+              onMouseOut={(e) => {
+                if (currentPage !== page) e.currentTarget.style.background = 'transparent';
+              }}
+              onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.92)'}
+              onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
               {page}
             </button>
           )
         ))}
       </div>
+
+      {/* Next Button */}
       <button
-        className="btn-ghost"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        style={{ fontSize: '13px', padding: '4px 8px', border: 'none' }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '4px',
+          fontSize: '14px', padding: '6px 12px', border: 'none',
+          background: 'transparent', 
+          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+          opacity: currentPage === totalPages ? 0.4 : 1,
+          color: 'var(--text-primary)',
+          transition: 'all 0.2s ease',
+        }}
+        onMouseOver={(e) => { if (currentPage !== totalPages) e.currentTarget.style.color = '#3b82f6'; }}
+        onMouseOut={(e) => { if (currentPage !== totalPages) e.currentTarget.style.color = 'var(--text-primary)'; }}
       >
-        Sau
+        Next <ChevronRight size={16} />
       </button>
     </div>
   );

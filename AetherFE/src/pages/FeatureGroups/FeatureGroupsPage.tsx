@@ -1,74 +1,43 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MoreVertical, Plus } from 'lucide-react';
-import { studioApi } from '@/services/studio';
-import type { FeatureGroup } from '@/types';
+import { Search, Plus } from 'lucide-react';
+import { useFeatureGroupsFetch } from '@/hooks';
 import { Pagination } from '@/components/ui/Pagination';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useNotification } from '@/components/ui/Notification';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { useDebounce } from '@/hooks/useDebounce';
+
 
 export const FeatureGroupsPage: React.FC = () => {
   const navigate = useNavigate();
   const { showNotification } = useNotification();
 
-  const [data, setData] = useState<FeatureGroup[]>([]);
-  const [total, setTotal] = useState(0);
+  // States
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  // Dropdown state
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const debouncedSearch = useDebounce(search, 500); // 500ms
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await studioApi.listFeatureGroups(search || undefined, statusFilter || undefined, page, 10);
-      setData(res.data.items);
-      setTotal(res.data.pagination.pages);
-    } catch (err: any) {
-      showNotification('error', err.message || 'Lỗi khi tải danh sách Feature Groups');
-    } finally {
-      setLoading(false);
-    }
-  }, [search, statusFilter, page, showNotification]);
+  const handleError = useCallback((msg: string) => showNotification('error', msg), [showNotification]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data, totalPages, loading, error, fetchData } = useFeatureGroupsFetch(
+    debouncedSearch, 
+    statusFilter, 
+    page, 
+    handleError
+  );
 
-  // WebSocket for real-time status updates
-  useEffect(() => {
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3000/studio/ws/feature-groups';
-    const ws = new WebSocket(wsUrl);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+    setPage(1);
+  };
 
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.event === 'FEATURE_GROUP_UPDATE' && payload.data) {
-          setData(prev => prev.map(fg =>
-            fg.id === payload.data.id
-              ? { ...fg, last_run_status: payload.data.status, updated_at: payload.data.updated_at }
-              : fg
-          ));
-        }
-      } catch (e) {
-        console.error('WS Error:', e);
-      }
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, []);
-
-  // Close dropdown on outside click
-  const handleClickOutside = useCallback(() => setOpenDropdownId(null), []);
-  useEffect(() => {
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [handleClickOutside]);
+  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setStatusFilter(e.target.value);
+    setPage(1);
+  };
 
   // Memoize date formatter
   const formatDate = useCallback((ts: number) => {
@@ -84,7 +53,7 @@ export const FeatureGroupsPage: React.FC = () => {
     <div style={{ maxWidth: '75rem', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-        <button className="btn btn-primary" onClick={() => navigate('/feature-groups/new')}>
+        <button className="btn btn-primary" onClick={() => navigate('/feature-groups/new')} style={{padding: '1.2rem'}}>
           <Plus size={16} /> Create new feature group
         </button>
       </div>
@@ -99,15 +68,14 @@ export const FeatureGroupsPage: React.FC = () => {
             className="form-input"
             style={{ paddingLeft: '40px' }}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchData()}
+            onChange={handleSearchChange}
           />
         </div>
         <div style={{ position: 'relative', width: '200px' }}>
           <select
             className="form-select"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={handleStatusChange}
           >
             <option value="">Tất cả trạng thái</option>
             <option value="RUNNING">Đang chạy</option>
@@ -117,65 +85,65 @@ export const FeatureGroupsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'visible' }}>
-        <div className="table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Auto Schedule</th>
-                <th>Status</th>
-                <th>Execution</th>
-                <th>Next Run At</th>
-                <th>Updated Time</th>
-                <th style={{ width: '80px', textAlign: 'center' }}>Operator</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && data.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px' }}><div className="spinner" style={{ margin: '0 auto' }}></div></td></tr>
-              ) : data.length === 0 ? (
-                <tr><td colSpan={7}><div className="empty-state">Không tìm thấy nhóm đặc trưng nào</div></td></tr>
-              ) : (
-                data.map((row) => (
-                  <tr key={row.id}>
-                    <td style={{ fontWeight: 500 }}>{row.name}</td>
-                    <td>{row.is_scheduled ? 'True' : 'False'}</td>
-                    <td><StatusBadge status={row.status} /></td>
-                    <td><StatusBadge execution={row.last_run_status} /></td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{formatDate(row.next_run_at)}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{formatDate(row.updated_at)}</td>
-                    <td style={{ textAlign: 'center', position: 'relative' }}>
-                      <button
-                        className="btn-ghost"
-                        style={{ padding: '6px', borderRadius: '4px' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenDropdownId(openDropdownId === row.id ? null : row.id);
-                        }}
-                      >
-                        <MoreVertical size={16} />
-                      </button>
-
-                      {openDropdownId === row.id && (
-                        <div className="dropdown-menu" style={{ right: '16px', top: '30px' }} onClick={(e) => e.stopPropagation()}>
-                          <button className="dropdown-item" onClick={() => navigate('/entities')}>Entity Registry</button>
-                          <button className="dropdown-item" onClick={() => navigate('/data-sources')}>Data Source</button>
-                          <button className="dropdown-item" onClick={() => navigate('/transformations')}>Transformation</button>
-                          <button className="dropdown-item" onClick={() => navigate(`/feature-groups/${row.id}`)}>View Detail</button>
-                        </div>
-                      )}
+      {error ? (
+        <ErrorState message={error} onRetry={fetchData} />
+      ) : (
+        <div className="card" style={{ padding: 0 }}>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Auto Schedule</th>
+                  <th>Status</th>
+                  <th>Execution</th>
+                  <th>Next Run At</th>
+                  <th>Updated Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && data.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '40px' }}>
+                      <div className="spinner" style={{ margin: '0 auto' }}></div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : data.length === 0 ? (
+                  <tr>
+                    <td colSpan={6}>
+                      <div className="empty-state">Không tìm thấy nhóm đặc trưng nào</div>
+                    </td>
+                  </tr>
+                ) : (
+                  data.map((row) => (
+                    <tr 
+                      key={row.id} 
+                      onClick={() => navigate(`/feature-groups/${row.id}`)}
+                      style={{ cursor: 'pointer' }}
+                      className="table-row-hover"
+                    >
+                      <td style={{ fontWeight: 500 }}>{row.name}</td>
+                      <td>{row.is_scheduled ? 'True' : 'False'}</td>
+                      <td><StatusBadge status={row.status} /></td>
+                      <td><StatusBadge execution={row.last_run_status} /></td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{formatDate(row.next_run_at)}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{formatDate(row.updated_at)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
-      <Pagination currentPage={page} totalPages={total} onPageChange={setPage} />
-
+      {data && data.length > 0 && (
+        <Pagination 
+          currentPage={page} 
+          totalPages={totalPages}
+          onPageChange={setPage} 
+        />
+      )}
     </div>
   );
 };

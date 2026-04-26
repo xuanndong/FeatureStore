@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Database, Clock, Info, CheckCircle2 } from 'lucide-react';
 import { servingApi } from '@/services/serving';
+import type { OnlineFeaturesResponse } from '@/types';
 import { useNotification } from '@/components/ui/Notification';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 export const OnlineExplorerPage: React.FC = () => {
   const { showNotification } = useNotification();
@@ -11,22 +13,33 @@ export const OnlineExplorerPage: React.FC = () => {
   const [recordId, setRecordId] = useState('');
 
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [hasQueried, setHasQueried] = useState(false);
+  const [result, setResult] = useState<OnlineFeaturesResponse | null>(null);
+  const [hasQueried, sethasQueried] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let interval: number | null = null;
+    
     const checkStatus = async () => {
       try {
+        setError(null);
         const res = await servingApi.checkRedisStatus();
         setStatus(res.data);
-      } catch (err) {
+      } catch (err: unknown) {
+        if (interval) clearInterval(interval);
         setStatus({ status: 'Disconnected', latency_ms: 0 });
+        const message = err instanceof Error ? err.message : 'Hệ thống hiện không phản hồi. Vui lòng thử lại sau.';
+        setError(message);
+        showNotification('error', message);
       }
     };
+    
     checkStatus();
-    const interval = setInterval(checkStatus, 30000); // Poll every 30s
-    return () => clearInterval(interval);
-  }, []);
+    interval = setInterval(checkStatus, 30000); // Poll every 30s
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showNotification]);
 
   const handleQuery = async () => {
     if (!entityName || !recordId) {
@@ -35,12 +48,13 @@ export const OnlineExplorerPage: React.FC = () => {
     }
     try {
       setLoading(true);
-      setHasQueried(true);
+      sethasQueried(true);
       const res = await servingApi.fetchOnlineFeatures({ entity_name: entityName, record_id: recordId });
       setResult(res.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setResult(null);
-      showNotification('error', err.message || 'Không tìm thấy dữ liệu hoặc lỗi kết nối');
+      const message = err instanceof Error ? err.message : 'Không tìm thấy dữ liệu hoặc lỗi kết nối';
+      showNotification('error', message);
     } finally {
       setLoading(false);
     }
@@ -54,7 +68,20 @@ export const OnlineExplorerPage: React.FC = () => {
         <p style={{ color: 'var(--text-secondary)', fontSize: 'clamp(0.875rem, 2vw, 0.9375rem)' }}>Khám phá và xác minh các giá trị đặc trưng trực tuyến trong Redis cluster.</p>
       </div>
 
-      <div style={{
+      {error ? (
+        <ErrorState 
+          message={error} 
+          onRetry={() => {
+            setError(null);
+            // Quick remount via state reset if needed, or simply let the user reload.
+            // But since useEffect depends on showNotification, we can trigger a refetch by 
+            // extracting checkStatus outside, or just doing a window.location.reload() for full reset.
+            window.location.reload();
+          }} 
+        />
+      ) : (
+        <>
+          <div style={{
         background: 'var(--bg-card)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: 'var(--shadow-md)',
@@ -193,7 +220,8 @@ export const OnlineExplorerPage: React.FC = () => {
       ) : (
         <div className="empty-state">Không tìm thấy dữ liệu</div>
       )}
-
+      </>
+      )}
     </div>
   );
 };

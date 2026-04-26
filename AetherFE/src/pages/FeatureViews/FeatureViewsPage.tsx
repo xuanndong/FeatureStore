@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, Filter, Tag, Plus, Info, Database } from 'lucide-react';
 import { viewsApi } from '@/services/views';
 import type { FeatureDiscovery } from '@/types';
 import { useNotification } from '@/components/ui/Notification';
+import { useFeatureViewsFetch } from '@/hooks';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 export const FeatureViewsPage: React.FC = () => {
   const { showNotification } = useNotification();
-  const [features, setFeatures] = useState<FeatureDiscovery[]>([]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
+  
+  const handleError = React.useCallback((msg: string) => showNotification('error', msg), [showNotification]);
+  const { features, loading, error, fetchFeatures } = useFeatureViewsFetch(search, handleError);
 
   // View Builder State
   const [viewName, setViewName] = useState('');
@@ -16,30 +19,15 @@ export const FeatureViewsPage: React.FC = () => {
   const [selectedFeatures, setSelectedFeatures] = useState<FeatureDiscovery[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  useEffect(() => {
-    const fetchFeatures = async () => {
-      try {
-        setLoading(true);
-        const res = await viewsApi.listAvailableFeatures(search || undefined);
-        setFeatures(res.data);
-      } catch (err: any) {
-        showNotification('error', err.message || 'Lỗi tải danh sách features');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFeatures();
-  }, [search, showNotification]);
+  const toggleFeature = React.useCallback((feature: FeatureDiscovery) => {
+    setSelectedFeatures(prev => 
+      prev.find(f => f.id === feature.id) 
+        ? prev.filter(f => f.id !== feature.id)
+        : [...prev, feature]
+    );
+  }, []);
 
-  const toggleFeature = (feature: FeatureDiscovery) => {
-    if (selectedFeatures.find(f => f.id === feature.id)) {
-      setSelectedFeatures(selectedFeatures.filter(f => f.id !== feature.id));
-    } else {
-      setSelectedFeatures([...selectedFeatures, feature]);
-    }
-  };
-
-  const handleGenerate = async () => {
+  const handleGenerate = React.useCallback(async () => {
     if (!viewName) return showNotification('error', 'Vui lòng nhập tên View');
     if (selectedFeatures.length === 0) return showNotification('error', 'Vui lòng chọn ít nhất 1 đặc trưng');
 
@@ -53,12 +41,13 @@ export const FeatureViewsPage: React.FC = () => {
       showNotification('success', 'Tạo Feature View thành công!');
       setViewName('');
       setSelectedFeatures([]);
-    } catch (err: any) {
-      showNotification('error', err.message);
+      fetchFeatures(); // Refresh available features if needed, though usually they don't disappear
+    } catch (err: unknown) {
+      showNotification('error', err instanceof Error ? err.message : 'Lỗi không xác định');
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [viewName, selectedFeatures, ttl, showNotification, fetchFeatures]);
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -94,7 +83,11 @@ export const FeatureViewsPage: React.FC = () => {
 
         {/* Feature List Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-          {loading ? (
+          {error ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <ErrorState message={error} onRetry={fetchFeatures} />
+            </div>
+          ) : loading ? (
             <div className="spinner" style={{ margin: '40px auto', gridColumn: '1 / -1' }}></div>
           ) : features.length === 0 ? (
             <div className="empty-state" style={{ gridColumn: '1 / -1' }}>Không tìm thấy đặc trưng nào</div>

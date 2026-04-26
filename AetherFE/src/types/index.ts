@@ -7,10 +7,10 @@ export type SourceFormat = 'CSV' | 'PARQUET' | 'AVRO' | 'JSON' | 'IMAGE' | 'TEXT
 
 // --- Pagination ---
 export interface PaginationMeta {
-  page: number;
-  limit: number;
-  total: number;
-  pages: number;
+  current_page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
 }
 
 export interface PaginatedResponse<T> {
@@ -41,8 +41,11 @@ export interface DataSource {
   updated_at: number; created_at: number;
 }
 export interface DataSourceCreate {
-  name: string; source_type: SourceType; source_format: SourceFormat;
-  location_uri: string; connection_options?: Record<string, string> | null;
+  name: string;
+  source_type: SourceType;
+  source_format: SourceFormat;
+  location_uri: string;
+  connection_options?: Record<string, string> | null;
 }
 export interface ConnectionTestRequest {
   location_uri: string; connection_options?: Record<string, string> | null;
@@ -50,19 +53,44 @@ export interface ConnectionTestRequest {
 
 // --- Feature Group ---
 export interface FeatureGroup {
-  id: string; name: string;
-  status: FeatureGroupStatus; last_run_status: Materialization;
-  is_scheduled: boolean; cron_expression: ScheduleInterval | null; next_run_at: number;
-  updated_at: number; created_at: number;
-  entity_id: string; source_id: string; transformation_id: string;
-}
-export interface FeatureGroupUpdate {
-  name?: string; status?: FeatureGroupStatus;
-  is_scheduled?: boolean; cron_expression?: ScheduleInterval;
+  id: string;
+  name: string;
+  version: number;
+  status: FeatureGroupStatus;
+  offline_uri: string | null;
+  last_run_status: Materialization;
+
+  is_scheduled: boolean;
+  cron_expression: ScheduleInterval | null;
+  next_run_at: number | null;
+
+  updated_at: number;
+  created_at: number;
+
+  entity_id: string;
+  source_id: string;
+  transformation_id: string | null;
+
+  transformation?: Transformation | null;
 }
 
+
+export interface FeatureGroupUpdate {
+  name?: string; 
+  status?: FeatureGroupStatus;
+  is_scheduled?: boolean;
+  cron_expression?: ScheduleInterval;
+}
+
+
 // Feature
-export interface Feature { id: string; name: string; data_type: string; group_id: string; }
+export interface Feature {
+  id: string;
+  name: string;
+  data_type: string;
+  group_id: string;
+}
+
 
 // --- Wizard payloads ---
 export interface WizardEntityStep {
@@ -84,6 +112,7 @@ export interface WizardTransformStep {
 }
 export interface FeatureGroupCreate {
   name: string;
+  use_online_store: boolean;
   entity_id?: string;
   new_entity_config?: EntityCreate;
   source_id?: string;
@@ -99,7 +128,21 @@ export interface FeatureGroupCreate {
 
 // --- Transformation ---
 export interface Transformation {
-  id: string; name: string; t_type: TransformationType; definition: string;
+  id: string;
+  name: string;
+  t_type: TransformationType;
+  definition: string;
+}
+
+// --- Transformation Preview ---
+export interface InferredFeature {
+  name: string;
+  data_type: string;
+}
+
+export interface TransformationPreview {
+  preview_data: Record<string, unknown>[];
+  inferred_features: InferredFeature[];
 }
 
 // --- Feature Views ---
@@ -113,6 +156,10 @@ export interface FeatureViewCreate { name: string; ttl_seconds: number; feature_
 
 // --- Online serving ---
 export interface OnlineQueryRequest { entity_name: string; record_id: string; }
+
+export interface OnlineFeaturesResponse {
+  [key: string]: string | number | boolean | null;
+}
 
 // --- Notification ---
 export interface NotificationItem {

@@ -1,187 +1,247 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { Toggle } from '@/components/ui/Toggle';
-import { useNotification } from '@/components/ui/Notification';
+import { Clock, Info, CheckCircle, XCircle, Code2, Settings } from 'lucide-react';
 import { studioApi } from '@/services/studio';
-import type { FeatureGroup, ScheduleInterval, FeatureGroupStatus } from '@/types';
+import { useNotification } from '@/components/ui/Notification';
+import { Toggle } from '@/components/ui/Toggle';
+import { FeatureGroupFeatures } from './FeatureGroupFeatures';
+import type { FeatureGroup, FeatureGroupStatus, ScheduleInterval } from '@/types';
 
 export const FeatureGroupDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showNotification } = useNotification();
-
-  const [data, setData] = useState<FeatureGroup | null>(null);
+  const [featureGroup, setFeatureGroup] = useState<FeatureGroup | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+
+  // Tabs state
+  const [activeTab, setActiveTab] = useState<'config' | 'transformation'>('config');
 
   // Form state
   const [isScheduled, setIsScheduled] = useState(false);
-  const [lifecycleStatus, setLifecycleStatus] = useState<FeatureGroupStatus>('ACTIVE');
-  const [cronExp, setCronExp] = useState<ScheduleInterval | ''>('');
+  const [cronExpression, setCronExpression] = useState('');
+  const [status, setStatus] = useState<FeatureGroupStatus>('ACTIVE');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
-    // Note: there is no GET /feature-groups/:id in the provided studio router.
-    // I will mock this for now, or if it exists, uncomment real call.
-    // Instead of failing, we will simulate a fetch using list endpoint or empty fallback.
+    let isMounted = true;
     const fetchDetail = async () => {
       try {
         setLoading(true);
-        // Fallback: list all and find it
-        const res = await studioApi.listFeatureGroups();
-        const found = res.data.items.find(x => x.id === id);
-        if (found) {
-          setData(found);
-          setIsScheduled(found.is_scheduled);
-          setLifecycleStatus(found.status);
-          setCronExp(found.cron_expression || '');
-        } else {
-          showNotification('error', 'Không tìm thấy chi tiết nhóm đặc trưng');
+        const res = await studioApi.listFeatureGroups(undefined, undefined, 1, 100);
+        const found = res.data.items.find(g => g.id === id);
+        if (isMounted) {
+          if (found) {
+            setFeatureGroup(found);
+            setIsScheduled(found.is_scheduled);
+            setCronExpression(found.cron_expression || 'daily');
+            setStatus(found.status);
+          } else {
+            showNotification('error', 'Không tìm thấy Feature Group');
+            navigate('/feature-groups');
+          }
         }
-      } catch (err: any) {
-        showNotification('error', err.message);
+      } catch (err: unknown) {
+        if (isMounted) {
+          showNotification('error', err instanceof Error ? err.message : 'Lỗi khi tải chi tiết Feature Group');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchDetail();
-  }, [id, showNotification]);
+    return () => { isMounted = false; };
+  }, [id, navigate, showNotification]);
 
   const handleSave = async () => {
-    if (!id) return;
+    if (!featureGroup) return;
     try {
-      setSaving(true);
-      await studioApi.updateFeatureGroup(id, {
+      setIsSaving(true);
+      const updated = await studioApi.updateFeatureGroup(featureGroup.id, {
         is_scheduled: isScheduled,
-        status: lifecycleStatus,
-        cron_expression: isScheduled ? (cronExp as ScheduleInterval) : undefined
+        cron_expression: isScheduled ? cronExpression as ScheduleInterval : undefined,
+        status: status
       });
-      showNotification('success', 'Cập nhật thành công!');
-      navigate('/feature-groups');
-    } catch (err: any) {
-      showNotification('error', err.message);
+      setFeatureGroup(updated.data);
+      showNotification('success', 'Đã lưu cấu hình');
+    } catch (err: unknown) {
+      showNotification('error', err instanceof Error ? err.message : 'Lỗi khi lưu cấu hình');
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
   };
 
-  if (loading) return <div className="spinner" style={{ margin: '100px auto' }}></div>;
-  if (!data) return <div className="empty-state">Không có dữ liệu</div>;
+  if (loading) return <div className="empty-state"><div className="spinner" /></div>;
+  if (!featureGroup) return null;
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <button className="btn-ghost" style={{ padding: '8px', borderRadius: '4px' }} onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 700 }}>Chi tiết Feature Group</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Cấu hình lịch trình và vòng đời cho nhóm đặc trưng này</p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn btn-secondary" onClick={() => navigate(-1)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? <div className="spinner spinner-sm"></div> : 'Save Changes'}
-          </button>
-        </div>
+    // Responsive container
+    <div style={{ 
+      display: 'flex', 
+      flexWrap: 'wrap', 
+      height: 'calc(100vh - var(--topbar-height))', 
+      background: 'var(--bg)',
+      overflowY: 'auto'
+    }}>
+      
+      {/* LEFT: Features List (Sidebar) */}
+      <div style={{ flex: '1 1 240px', maxWidth: '300px', minWidth: '240px', borderRight: '1px solid var(--border)' }}>
+        <FeatureGroupFeatures groupId={featureGroup.id} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px', alignItems: 'start' }}>
-
-        {/* Main config panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-          <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>Enable Scheduling</h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Tự động chạy các tác vụ cụ thể hóa dữ liệu</p>
-            </div>
-            <Toggle checked={isScheduled} onChange={setIsScheduled} />
+      {/* RIGHT: Main Content */}
+      <div style={{ flex: '3 1 600px', padding: '32px', display: 'flex', flexDirection: 'column' }}>
+        
+        {/* Header Area */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '8px' }}>{featureGroup.name}</h1>
+            <p style={{ color: 'var(--text-secondary)' }}>Phiên bản: v{featureGroup.version}</p>
           </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button className="btn btn-ghost" onClick={() => navigate('/feature-groups')}>Quay lại</button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <div className="spinner spinner-sm" /> : 'Lưu cấu hình'}
+            </button>
+          </div>
+        </div>
 
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Lifecycle Status</label>
-              <select
-                className="form-select"
-                value={lifecycleStatus}
-                onChange={(e) => setLifecycleStatus(e.target.value as FeatureGroupStatus)}
-              >
-                <option value="ACTIVE">Active</option>
-                <option value="DEPRECATED">Deprecated</option>
-                <option value="INACTIVE">Inactive</option>
-              </select>
-            </div>
+        {/* Tabs Navigation */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', gap: '32px' }}>
+          <button 
+            onClick={() => setActiveTab('config')}
+            style={{ 
+              background: 'none', border: 'none', padding: '12px 0', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+              color: activeTab === 'config' ? 'var(--primary)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'config' ? '2px solid var(--primary)' : '2px solid transparent',
+            }}
+          >
+            <Settings size={16} /> Cấu hình & Metadata
+          </button>
+          <button 
+            onClick={() => setActiveTab('transformation')}
+            style={{ 
+              background: 'none', border: 'none', padding: '12px 0', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+              color: activeTab === 'transformation' ? 'var(--primary)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'transformation' ? '2px solid var(--primary)' : '2px solid transparent',
+            }}
+          >
+            <Code2 size={16} /> Logic biến đổi (Transformation)
+          </button>
+        </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Cron Expression</label>
-              <select
-                className="form-select"
-                value={cronExp}
-                onChange={(e) => setCronExp(e.target.value as ScheduleInterval)}
-                disabled={!isScheduled}
-              >
-                <option value="">Chọn tần suất...</option>
-                <option value="hourly">HOURLY (mỗi giờ)</option>
-                <option value="daily">DAILY (mỗi ngày)</option>
-                <option value="1_week">WEEKLY (mỗi tuần)</option>
-                <option value="1_month">MONTHLY (mỗi tháng)</option>
-                <option value="3_months">QUARTERLY (mỗi quý)</option>
-              </select>
-              {isScheduled && (
-                <div style={{ fontSize: '12px', color: 'var(--primary)', marginTop: '8px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <Clock size={14} /> Current Time: {new Date().toLocaleString()}
+        {/* TAB CONTENT: CONFIG & METADATA */}
+        {activeTab === 'config' && (
+          <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '15px' }}>Tự động lập lịch</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Chạy các tác vụ cụ thể hóa dữ liệu</div>
+                  </div>
+                  <Toggle checked={isScheduled} onChange={setIsScheduled} />
                 </div>
-              )}
+
+                <div style={{ marginBottom: '24px' }}>
+                  <label className="form-label">Trạng thái</label>
+                  <select className="form-select" value={status} onChange={e => setStatus(e.target.value as FeatureGroupStatus)}>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="DEPRECATED">DEPRECATED</option>
+                    <option value="INACTIVE">INACTIVE</option>
+                  </select>
+                </div>
+
+                {isScheduled && (
+                  <div style={{ animation: 'fadeIn 0.3s ease-in-out' }}>
+                    <label className="form-label">Chu kỳ chạy</label>
+                    <select className="form-select" value={cronExpression} onChange={e => setCronExpression(e.target.value)}>
+                      <option value="daily">Hàng ngày</option>
+                      <option value="hourly">Hàng giờ</option>
+                      <option value="1_week">Hàng tuần</option>
+                      <option value="1_month">Hàng tháng</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-md)', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', gap: '12px' }}>
+                <Info size={18} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '8px' }}>Quy tắc hệ thống</div>
+                  <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <li>Thất bại hệ thống sẽ tự động vô hiệu hóa lịch chạy.</li>
+                    <li>Không thể lập lịch nếu trạng thái là INACTIVE.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ height: 'fit-content' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '20px', letterSpacing: '0.05em' }}>THÔNG TIN THỰC THI</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div>
+                  <div className="form-label">Lần chạy cuối</div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: featureGroup.last_run_status === 'COMPLETED' ? 'var(--exec-success-bg)' : featureGroup.last_run_status === 'FAILED' ? 'var(--exec-failed-bg)' : 'var(--exec-pending-bg)', color: featureGroup.last_run_status === 'COMPLETED' ? 'var(--exec-success-text)' : featureGroup.last_run_status === 'FAILED' ? 'var(--exec-failed-text)' : 'var(--exec-pending-text)' }}>
+                    {featureGroup.last_run_status === 'COMPLETED' ? <CheckCircle size={14} /> : featureGroup.last_run_status === 'FAILED' ? <XCircle size={14} /> : <Clock size={14} />}
+                    {featureGroup.last_run_status || 'PENDING'}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="form-label">Ngày tạo</div>
+                  <div style={{ fontSize: '13px' }}>{new Date(featureGroup.created_at * 1000).toLocaleString()}</div>
+                </div>
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="info-box" style={{ flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
-              <Info size={16} /> Quy tắc lập lịch
+        {/* TAB CONTENT: TRANSFORMATION */}
+        {activeTab === 'transformation' && (
+          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 600 }}>Mã nguồn logic</h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Mã nguồn được liên kết từ Logic Library</p>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span className="badge" style={{ background: 'var(--surface)', padding: '6px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '12px' }}>
+                  {featureGroup.transformation?.t_type || 'SQL'}
+                </span>
+                
+                {/* <button 
+                  className="btn btn-secondary"
+                  onClick={() => navigate(`/transformations?id=${featureGroup.transformation_id}`)}
+                >
+                  <Code2 size={16} /> Edit in Studio
+                </button> */}
+              </div>
             </div>
-            <ul style={{ paddingLeft: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <li>Các lượt chạy thất bại sẽ tự động vô hiệu hóa lập lịch để ngăn chặn lỗi dữ liệu</li>
-              <li>Không thể lập lịch cho các nhóm đã ngưng hỗ trợ hoặc không hoạt động</li>
-              <li>Các biểu thức Cron được ánh xạ sang các khoảng thời gian nội bộ</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Right metadata panel */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <h3 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>METADATA</h3>
-
-          <div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Group Name</div>
-            <div style={{ fontWeight: 500 }}>{data.name}</div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Offline URI</div>
-            <div style={{ background: 'var(--surface)', padding: '8px 12px', borderRadius: '4px', fontSize: '13px', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
-              s3://aether-platform/features/{data.name.toLowerCase()}/v1
+            
+            <div style={{ 
+              background: '#1e1e1e', 
+              color: '#d4d4d4', 
+              padding: '20px', 
+              borderRadius: '8px', 
+              fontFamily: '"Fira Code", monospace',
+              fontSize: '13px',
+              lineHeight: '1.5',
+              overflowX: 'auto',
+              flex: 1
+            }}>
+              <pre style={{ margin: 0 }}>
+                <code>
+                  {featureGroup.transformation?.definition || '-- Logic biến đổi sẽ hiển thị tại đây...'}
+                </code>
+              </pre>
             </div>
           </div>
-
-          <div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Last Run Status</div>
-            <span className={`badge ${data.last_run_status === 'COMPLETED' ? 'badge-success' : data.last_run_status === 'FAILED' ? 'badge-failed' : 'badge-pending'}`}>
-              {data.last_run_status}
-            </span>
-          </div>
-
-          <div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Created At</div>
-            <div style={{ fontSize: '13px' }}>{new Date(data.created_at * 1000).toLocaleDateString()}</div>
-          </div>
-        </div>
+        )}
 
       </div>
     </div>
   );
 };
-
-import { Info, Clock } from 'lucide-react';
