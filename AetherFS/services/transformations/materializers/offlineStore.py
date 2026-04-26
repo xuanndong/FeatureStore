@@ -38,6 +38,7 @@ class OfflineStore:
                 secret_key=settings.MINIO_SECRET_KEY,
                 endpoint_override=parsed_endpoint.netloc,
                 scheme=parsed_endpoint.scheme,
+                allow_bucket_creation=True
             )
         elif scheme in ["file", ""]:
             fs = pafs.LocalFileSystem()

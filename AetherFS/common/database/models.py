@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 # Third party Libraries
-from sqlmodel import SQLModel, Field, Relationship, Column, String,Text, Float, Boolean
+from sqlmodel import SQLModel, Field, Relationship, Column, String,Text, Float, Boolean, Integer
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -73,7 +73,10 @@ class Transformation(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(sa_column=Column(String(100), unique=True, nullable=False))
     t_type: TransformationType = Field(sa_column=Column(String(20))) # SQL, PYTHON_UDF, AGGREGATION
+
     definition: str = Field(sa_column=Column(Text, nullable=False))
+    content_hash: str = Field(index=True, max_length=64, description="SHA-256 hash of type and definition")
+
     window_config: dict | None = Field(default=None, sa_column=Column(JSONB))
     updated_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float, onupdate=currentTimeUTC))
     created_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float))
@@ -88,8 +91,13 @@ class FeatureGroup(SQLModel, table=True):
     """
     __tablename__ = "feature_groups"
 
+    __table_args__ = (
+        UniqueConstraint("name", "version", name="uq_feature_group_name_version"),
+    )
+
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str = Field(sa_column=Column(String(100), unique=True, nullable=False))
+    name: str = Field(sa_column=Column(String(100), nullable=False))
+    version: int = Field(default=1, sa_column=Column(Integer, nullable=False))
     status: FeatureGroupStatus = Field(sa_column=Column(String(20), default=FeatureGroupStatus.ACTIVE)) # ACTIVE, INACTIVE, DEPRECATED
 
     offline_uri: str | None = Field(default=None, sa_column=Column(String(255)))

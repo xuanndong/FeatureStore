@@ -34,6 +34,7 @@ class FeatureCreate(BaseModel):
 
 class FeatureGroupCreate(BaseModel):
     name: str = Field(..., max_length=100, description="Feature Group Name")
+    use_online_store: bool = Field(default=False)
 
     # --- Entity ---
     entity_id: UUID | None = Field(default=None, description="Use existing Entity")
@@ -86,10 +87,22 @@ class StatusPayload(BaseModel):
     message: str
 
 
+class TransformationRead(BaseModel):
+    id: UUID
+    name: str
+    t_type: TransformationType
+    definition: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class FeatureGroupRead(BaseModel):
     id: UUID
     name: str
+    version: int
     status: FeatureGroupStatus
+
+    offline_uri: str | None = None
     last_run_status: Materialization
 
     is_scheduled: bool
@@ -101,7 +114,9 @@ class FeatureGroupRead(BaseModel):
 
     entity_id: UUID
     source_id: UUID
-    transformation_id: UUID
+    transformation_id: UUID | None
+
+    transformation: TransformationRead | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

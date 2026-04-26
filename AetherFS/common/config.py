@@ -13,9 +13,10 @@ class Settings:
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
     # Internal Storage (MinIO/S3)
-    MINIO_ENDPOINT: str = os.getenv("FEATURE_STORE_MINIO_ENDPOINT", "http://127.0.0.1:9000")
-    MINIO_ACCESS_KEY: str = os.getenv("FEATURE_STORE_MINIO_ACCESS_KEY", "admin")
-    MINIO_SECRET_KEY: str = os.getenv("FEATURE_STORE_MINIO_SECRET_KEY", "password123")
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "http://127.0.0.1:9000")
+    MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "admin")
+    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "password123")
+    OFFLINE_STORE_URI: str = os.getenv("OFFLINE_STORE_URI", "s3://aether-offline-store")
 
     # Ray Cluster
     RAY_CLUSTER_ADDRESS: str = os.getenv("RAY_CLUSTER_ADDRESS", "local").lower()

@@ -58,21 +58,32 @@ async def list_entities(
     """
     List entities
     """
-    query = select(Entity)
+    filters = []
     if search:
-        query = query.where(Entity.name.ilike(f"%{search}%") | Entity.join_key.ilike(f"%{search}%"))
+        filters.append(Entity.name.ilike(f"%{search}%") | Entity.join_key.ilike(f"%{search}%"))
 
-    total = (await db.execute(select(func.count(Entity.id)).select_from(Entity))).scalar() or 0
+    count_query = select(func.count(Entity.id))
+    data_query = select(Entity)
 
-    result = await db.execute(
-        query.order_by(Entity.created_at.desc()).offset(pagination.offset).limit(pagination.limit)
+    if filters:
+        count_query = count_query.where(*filters)
+        data_query = data_query.where(*filters)
+
+    total = (await db.execute(count_query)).scalar() or 0
+
+    data_query = (
+        data_query
+        .order_by(Entity.created_at.desc())
+        .offset(pagination.offset)
+        .limit(pagination.limit)
     )
 
+    result = await db.execute(data_query)
     entities = result.scalars().all()
 
     return StandardResponse(
         data={
-            "items": [EntityRead.model_validate(entity) for entity in entities],
+            "items": [EntityRead.model_validate(entity).model_dump() for entity in entities],
             "pagination": pagination.get_metadata(total)
         }
     )
@@ -228,21 +239,32 @@ async def list_data_sources(
     """
     List data sources
     """
-    query = select(DataSource)
+    filters = []
     if search:
-        query = query.where(DataSource.name.ilike(f"%{search}%"))
+        filters.append(DataSource.name.ilike(f"%{search}%"))
 
-    total = (await db.execute(select(func.count(DataSource.id)).select_from(DataSource))).scalar() or 0
+    count_query = select(func.count(DataSource.id))
+    data_query = select(DataSource)
 
-    result = await db.execute(
-        query.order_by(DataSource.created_at.desc()).offset(pagination.offset).limit(pagination.limit)
+    if filters:
+        count_query = count_query.where(*filters)
+        data_query = data_query.where(*filters)
+
+    total = (await db.execute(count_query)).scalar() or 0
+
+    data_query = (
+        data_query
+        .order_by(DataSource.created_at.desc())
+        .offset(pagination.offset)
+        .limit(pagination.limit)
     )
 
+    result = await db.execute(data_query)
     sources = result.scalars().all()
 
     return StandardResponse(
         data={
-            "items": [DataSourceRead.model_validate(source) for source in sources],
+            "items": [DataSourceRead.model_validate(source).model_dump() for source in sources],
             "pagination": pagination.get_metadata(total)
         }
     )

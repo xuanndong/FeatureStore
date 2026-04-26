@@ -6,6 +6,7 @@ from datetime import timezone, datetime
 # Third Libraries
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlmodel import select, func
 import grpc
 
@@ -19,7 +20,7 @@ from services.photon.schemas.studio import FeatureGroupCreate, PreviewRunRequest
 from services.photon.core.responses import StandardResponse
 from services.photon.core.dependencies import verify_api_version, PaginationParams
 from services.photon.core.grpcClient import grpc_client
-from services.photon.core.utils import infer_features_from_records, calculate_next_run
+from services.photon.core.utils import infer_features_from_records, calculate_next_run, generate_strict_hash
 from services.photon.core.websocket import manager
 
 
@@ -125,20 +126,15 @@ async def create_feature_group(
     """
     Create Feature Group along with Entity, DataSource, Transformation, and Features in a single transaction
     """
-    # Check for duplicate names (Feature Group & Transforamtion)
-    if await db.scalar(select(FeatureGroup.id).where(FeatureGroup.name == payload.name)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Feature Group name already exists"
-        )
-
-    if await db.scalar(select(Transformation.id).where(Transformation.name == payload.transformation_name)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Transformation name already exists"
-        )
+    base_uri = settings.OFFLINE_STORE_URI.rstrip('/')
 
     try:
+        max_version = await db.scalar(
+            select(func.max(FeatureGroup.version))
+            .where(FeatureGroup.name == payload.name)
+        )
+        current_version = (max_version or 0) + 1
+
         final_entity_id = payload.entity_id
         final_source_id = payload.source_id
 
@@ -191,26 +187,73 @@ async def create_feature_group(
             source_format = source.source_format
             connection_options_json = json.dumps(source.connection_options) if source.connection_options else ""
 
-        # Create transformation
-        new_transform = Transformation(
-            name=payload.transformation_name,
-            t_type=payload.transform_type,
-            definition=payload.transform_definition
+        content_hash = generate_strict_hash(
+            payload.transform_type.value, 
+            payload.transform_definition, 
+            payload.features
         )
 
-        db.add(new_transform)
-        await db.flush()
+        existing_transform = await db.scalar(
+            select(Transformation).where(Transformation.content_hash == content_hash)
+        )
+
+        if existing_transform:
+            final_transform_id = existing_transform.id
+        else:
+            if await db.scalar(select(Transformation.id).where(Transformation.name == payload.transformation_name)):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Transformation name '{payload.transformation_name}' already exists with different logic."
+                )
+
+            # Create transformation
+            new_transform = Transformation(
+                name=payload.transformation_name,
+                t_type=payload.transform_type,
+                definition=payload.transform_definition,
+                content_hash=content_hash
+            )
+
+            db.add(new_transform)
+            await db.flush()
+
+            final_transform_id = new_transform.id
+
+        existing_pipeline = await db.scalar(
+            select(FeatureGroup).where(
+                FeatureGroup.name == payload.name,
+                FeatureGroup.entity_id == final_entity_id,
+                FeatureGroup.source_id == final_source_id,
+                FeatureGroup.transformation_id == final_transform_id
+            )
+        )
+
+        if existing_pipeline:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"This data is not new! It is identical to version v{existing_pipeline.version} of '{payload.name}'. Skipping re-run"
+            )
+
+        next_run_timestamp = None
+        if payload.is_scheduled and payload.cron_expression:
+            interval_value = payload.cron_expression.value if hasattr(payload.cron_expression, 'value') else payload.cron_expression
+            next_run_timestamp = calculate_next_run(interval_value)
 
         # Create feature group
         new_fg_id = uuid.uuid4()
+        output_uri = f"{base_uri}/feature_groups/{new_fg_id}"
+
         new_fg = FeatureGroup(
             id=new_fg_id,
             name=payload.name,
+            version=current_version,
+            offline_uri=output_uri,
             entity_id=final_entity_id,
             source_id=final_source_id,
-            transformation_id=new_transform.id,
+            transformation_id=final_transform_id,
             is_scheduled=payload.is_scheduled,
-            cron_expression=payload.cron_expression if payload.is_scheduled else None
+            cron_expression=payload.cron_expression if payload.is_scheduled else None,
+            next_run_at=next_run_timestamp
         )
 
         db.add(new_fg)
@@ -235,6 +278,7 @@ async def create_feature_group(
 
         run_req = pb2.RunRequest(
             location_uri=location_uri,
+            output_uri=output_uri,
             source_format=proto_source_format,
             transform_type=proto_transform_type,
             transform_definition=payload.transform_definition,
@@ -255,7 +299,10 @@ async def create_feature_group(
 
         return StandardResponse(
             detail="Feature Group created successfully",
-            data={"feature_group_id": str(new_fg_id)}
+            data={
+                "feature_group_id": str(new_fg_id),
+                "version": current_version
+            }
         )
     except HTTPException:
         await db.rollback()
@@ -341,24 +388,35 @@ async def list_feature_groups(
     """
     Get list feature group
     """
-    query = select(FeatureGroup)
+    filters = []
     if search:
-        query = query.where(FeatureGroup.name.ilike(f"%{search}%"))
-
+        filters.append(FeatureGroup.name.ilike(f"%{search}%"))
     if execution_status:
-        query = query.where(FeatureGroup.last_run_status == execution_status)
+        filters.append(FeatureGroup.last_run_status == execution_status)
 
-    total = (await db.execute(select(func.count(FeatureGroup.id)).select_from(FeatureGroup))).scalar() or 0
+    count_query = select(func.count(FeatureGroup.id))
+    data_query = select(FeatureGroup)
 
-    result = await db.execute(
-        query.order_by(FeatureGroup.created_at.desc()).offset(pagination.offset).limit(pagination.limit)
+    if filters:
+        count_query = count_query.where(*filters)
+        data_query = data_query.where(*filters)
+
+    total = (await db.execute(count_query)).scalar() or 0
+
+    data_query = (
+        data_query
+        .options(selectinload(FeatureGroup.transformation))
+        .order_by(FeatureGroup.created_at.desc())
+        .offset(pagination.offset)
+        .limit(pagination.limit)
     )
 
+    result = await db.execute(data_query)
     feature_groups = result.scalars().all()
 
     return StandardResponse(
         data={
-            "items": [FeatureGroupRead.model_validate(fg).model_dump() for fg in feature_groups],
+            "items": [FeatureGroupRead.model_validate(feature_group).model_dump() for feature_group in feature_groups],
             "pagination": pagination.get_metadata(total)
         }
     )

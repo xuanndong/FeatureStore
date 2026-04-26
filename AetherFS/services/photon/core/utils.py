@@ -1,6 +1,8 @@
 # Standard Libraries
 import os
+import re
 import asyncio
+import hashlib
 import calendar
 from urllib.parse import urlparse
 from typing import Any
@@ -102,3 +104,14 @@ def calculate_next_run(interval: str, from_time: datetime = None) -> float:
             return None
 
     return next_time.timestamp()
+
+
+def generate_strict_hash(t_type: str, definition: str, features: list) -> str:
+    clean_code = re.sub(r'\s+', '', definition)
+
+    feature_strings = [f"{f.name}:{f.data_type}" for f in features]
+    feature_strings.sort() 
+    clean_features = ",".join(feature_strings)
+
+    raw_content = f"{t_type}|{clean_code}|{clean_features}"
+    return hashlib.sha256(raw_content.encode('utf-8')).hexdigest()
