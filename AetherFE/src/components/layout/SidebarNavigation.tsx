@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Layers, Eye, Search, Database, Fingerprint,
+  RefreshCcw,
 } from 'lucide-react';
 
 interface NavItem {
@@ -19,7 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: 'Feature Groups', path: '/feature-groups', icon: Layers },
   { name: 'Entities', path: '/entities', icon: Fingerprint },
   { name: 'Data Sources', path: '/data-sources', icon: Database },
-  // { name: 'Materialization', path: '/materialization', icon: RefreshCcw },
+  { name: 'Materialization', path: '/materialization', icon: RefreshCcw },
   { name: 'Feature Views', path: '/feature-views', icon: Eye },
   { name: 'Online Explorer', path: '/online-explorer', icon: Search },
 ];

@@ -11,6 +11,7 @@ interface UseFeatureViewsFetchReturn {
 
 export const useFeatureViewsFetch = (
   search: string,
+  entityId: string,
   onError: (message: string) => void
 ): UseFeatureViewsFetchReturn => {
   const [features, setFeatures] = useState<FeatureDiscovery[]>([]);
@@ -18,10 +19,15 @@ export const useFeatureViewsFetch = (
   const [error, setError] = useState<string | null>(null);
 
   const fetchFeatures = useCallback(async () => {
+    if (!entityId) {
+      setFeatures([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      const res = await viewsApi.listAvailableFeatures(search || undefined);
+      const res = await viewsApi.listAvailableFeatures(search || undefined, entityId);
       setFeatures(res.data);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Hệ thống hiện không phản hồi. Vui lòng thử lại sau.';
@@ -30,10 +36,9 @@ export const useFeatureViewsFetch = (
     } finally {
       setLoading(false);
     }
-  }, [search, onError]);
+  }, [search, entityId, onError]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFeatures();
   }, [fetchFeatures]);
 

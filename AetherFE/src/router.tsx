@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { MaterializationPage } from './pages/Materialization/MaterializationPage';
 
 // Each page is loaded only when the user navigates to it
 const Dashboard = lazy(() => import('@/pages/Dashboard/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -12,7 +13,6 @@ const DataSourcesPage = lazy(() => import('@/pages/DataSources/DataSourcesPage')
 const TransformationsPage = lazy(() => import('@/pages/Transformations/TransformationsPage').then(m => ({ default: m.TransformationsPage })));
 const FeatureViewsPage = lazy(() => import('@/pages/FeatureViews/FeatureViewsPage').then(m => ({ default: m.FeatureViewsPage })));
 const OnlineExplorerPage = lazy(() => import('@/pages/OnlineExplorer/OnlineExplorerPage').then(m => ({ default: m.OnlineExplorerPage })));
-const MaterializationPage = lazy(() => import('@/pages/Materialization/MaterializationPage').then(m => ({ default: m.MaterializationPage })));
 
 const PageSpinner: React.FC = () => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '4rem' }}>

@@ -147,12 +147,35 @@ export interface TransformationPreview {
 
 // --- Feature Views ---
 export interface FeatureDiscovery {
-  id: string; name: string; data_type: string; group_id: string; group_name: string;
+  id: string;
+  name: string;
+  data_type: string;
+  group_id: string; 
+  group_name: string;
+  entity_id: string;
+  entity_name: string;
 }
+
 export interface FeatureView {
-  id: string; name: string; ttl_seconds: number; created_at: number;
+  id: string;
+  name: string;
+  ttl_seconds: number;
+  entity_id: string;
+  created_at: number;
+  feature_count: number;
 }
-export interface FeatureViewCreate { name: string; ttl_seconds: number; feature_ids: string[]; }
+
+export interface FeatureViewCreate { 
+  name: string;
+  ttl_seconds: number;
+  entity_id: string;
+  feature_ids: string[];
+}
+
+export interface FeatureViewUpdate {
+  name?: string;
+  ttl_seconds?: number;
+}
 
 // --- Online serving ---
 export interface OnlineQueryRequest { entity_name: string; record_id: string; }
@@ -176,4 +199,59 @@ export interface PreviewRunRequest {
   transform_definition: string;
   limit?: number;
   requirements?: string[];
+}
+
+
+// --- Materialization ---
+export type DatasetType = 'GROUP' | 'VIEW';
+
+export interface DatasetItem {
+  dataset_id: string;
+  name: string;
+  dataset_type: DatasetType;
+  created_at: number;
+}
+
+export interface DatasetAccessInfoData {
+  dataset_id: string;
+  dataset_type: string;
+  access_url: string;
+  data_format: string;
+  expires_at: number;
+}
+
+export interface RunScriptPayload {
+  code: string;
+  requirements?: string[];
+}
+
+export interface ChartDataPoint {
+  x: number | string;
+  y: number;
+  group?: string;
+}
+
+export interface AnalyticsChart {
+  type: 'line' | 'bar' | 'horizontal_bar' | 'scatter' | 'pie';
+  title: string;
+  x_label: string;
+  y_label: string;
+  data: ChartDataPoint[];
+}
+
+export interface ScalarMetric {
+  name: string;
+  value: number;
+  unit?: string;
+}
+
+export interface AnalyticsData {
+  scalars?: ScalarMetric[];
+  charts?: AnalyticsChart[];
+  error?: string;
+}
+
+export interface ScriptExecutionData {
+  logs: string;
+  analytics: AnalyticsData;
 }

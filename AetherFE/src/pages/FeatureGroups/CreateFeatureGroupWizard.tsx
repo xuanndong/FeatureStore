@@ -4,6 +4,7 @@ import { registryApi } from '@/services/registry';
 import { studioApi } from '@/services/studio';
 import { useNotification } from '@/components/ui/Notification';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { ArrowLeft } from 'lucide-react';
 
 import { StepIndicator } from '@/pages/FeatureGroups/wizard/StepIndicator';
 import { Step1Entity } from '@/pages/FeatureGroups/wizard/Step1Entity';
@@ -144,9 +145,20 @@ export const CreateFeatureGroupWizard: React.FC = () => {
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      <div style={{ textAlign: 'center' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px' }}>Trình tạo Feature Group</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Kết nối các thực thể, nguồn dữ liệu và logic biến đổi để định nghĩa một Feature Group mới trong Aether Registry.</p>
+      
+      {/* Come back */}
+      <div>
+        <button 
+          className="btn btn-ghost" 
+          onClick={() => setShowCancelModal(true)} 
+          style={{ padding: 0, gap: '6px', color: 'var(--text-secondary)', marginBottom: '16px' }}
+        >
+          <ArrowLeft size={16} /> Quay lại
+        </button>
+        <div style={{ textAlign: 'center' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px' }}>Trình tạo Feature Group</h1>
+          <p style={{ color: 'var(--text-secondary)' }}>Kết nối các thực thể, nguồn dữ liệu và logic biến đổi để định nghĩa một Feature Group mới trong Aether Registry.</p>
+        </div>
       </div>
 
       <StepIndicator currentStep={step} />
