@@ -52,6 +52,25 @@ export interface ConnectionTestRequest {
 }
 
 // --- Feature Group ---
+export interface FeatureInGroupRead {
+  id: string;
+  name: string;
+  data_type: string;
+  description: string | null;
+}
+
+export interface FeatureGroupDetail {
+  id: string;
+  name: string;
+  version: number;
+  status: FeatureGroupStatus;
+  offline_uri: string;
+  updated_at: number | null;
+  created_at: number | null;
+  features: FeatureInGroupRead[];
+  endpoint_url: string;
+}
+
 export interface FeatureGroup {
   id: string;
   name: string;
@@ -162,7 +181,8 @@ export interface FeatureView {
   ttl_seconds: number;
   entity_id: string;
   created_at: number;
-  feature_count: number;
+  features: Feature[];
+  endpoint_url: string;
 }
 
 export interface FeatureViewCreate { 
@@ -210,17 +230,23 @@ export interface DatasetItem {
   name: string;
   dataset_type: DatasetType;
   created_at: number;
+  endpoint_url: string;
 }
 
 export interface DatasetAccessInfoData {
   dataset_id: string;
   dataset_type: string;
-  access_url: string;
+  dataset_uri: string;
+  access_key: string;
+  secret_key: string;
+  session_token: string;
   data_format: string;
   expires_at: number;
 }
 
 export interface RunScriptPayload {
+  dataset_id: string;
+  dataset_type: string;
   code: string;
   requirements?: string[];
 }
@@ -231,12 +257,15 @@ export interface ChartDataPoint {
   group?: string;
 }
 
-export interface AnalyticsChart {
-  type: 'line' | 'bar' | 'horizontal_bar' | 'scatter' | 'pie';
-  title: string;
-  x_label: string;
-  y_label: string;
-  data: ChartDataPoint[];
+export interface AnalyticsScalar {
+  name: string;
+  value: string | number;
+  unit?: string;
+}
+
+export interface AnalyticsImage {
+  title?: string;
+  data: string;
 }
 
 export interface ScalarMetric {
@@ -246,9 +275,8 @@ export interface ScalarMetric {
 }
 
 export interface AnalyticsData {
-  scalars?: ScalarMetric[];
-  charts?: AnalyticsChart[];
-  error?: string;
+  scalars?: AnalyticsScalar[];
+  images?: AnalyticsImage[];
 }
 
 export interface ScriptExecutionData {

@@ -13,6 +13,7 @@ const DataSourcesPage = lazy(() => import('@/pages/DataSources/DataSourcesPage')
 const TransformationsPage = lazy(() => import('@/pages/Transformations/TransformationsPage').then(m => ({ default: m.TransformationsPage })));
 const FeatureViewsPage = lazy(() => import('@/pages/FeatureViews/FeatureViewsPage').then(m => ({ default: m.FeatureViewsPage })));
 const OnlineExplorerPage = lazy(() => import('@/pages/OnlineExplorer/OnlineExplorerPage').then(m => ({ default: m.OnlineExplorerPage })));
+const DatasetWorkspacePage = lazy(() => import('@/pages/Materialization/DatasetWorkspacePage').then(m => ({ default: m.DatasetWorkspacePage })));
 
 const PageSpinner: React.FC = () => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '4rem' }}>
@@ -103,6 +104,14 @@ export const AppRouter: React.FC = () => {
           element={
             <Suspense fallback={<PageSpinner />}>
               <MaterializationPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="materialization/workspace/:datasetId"
+          element={
+            <Suspense fallback={<PageSpinner />}>
+              <DatasetWorkspacePage />
             </Suspense>
           }
         />
