@@ -10,7 +10,7 @@ import redis.asyncio as aioredis
 
 # Local Libraries
 from common.config import settings
-from services.photon.routers import view, registry, serving, studio
+from services.photon.routers import view, registry, serving, studio, datasets
 
 # Logs
 logger = logging.getLogger(__name__)
@@ -58,6 +58,7 @@ app.include_router(view.router)
 app.include_router(studio.router)
 app.include_router(serving.router)
 app.include_router(registry.router)
+app.include_router(datasets.router)
 
 
 @app.get("/", tags=["Health Check"])

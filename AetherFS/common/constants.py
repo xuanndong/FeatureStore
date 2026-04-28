@@ -95,8 +95,13 @@ class DatasetConfig:
 
 
 class ScheduleInterval(str, Enum):
-    HOURLY = "hourly"
-    DAILY = "daily"
-    WEEKLY = "1_week"
-    MONTHLY = "1_month"
-    QUARTERLY = "3_months"
+    HOURLY = "HOURLY"
+    DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
+    QUARTERLY = "QUARTERLY"
+
+
+class DatasetsType(str, Enum):
+    FEATURE_GROUP = "GROUP"
+    FEATURE_VIEW = "VIEW"

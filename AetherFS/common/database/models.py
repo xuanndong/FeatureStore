@@ -153,5 +153,28 @@ class FeatureView(SQLModel, table=True):
     ttl_seconds: int = Field(default=3600)
     created_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float))
 
+    entity_id: UUID = Field(foreign_key="entities.id", index=True, nullable=False)
+
     # Relationships
     features: list[Feature] = Relationship(back_populates="views", link_model=FeatureViewMember)
+
+
+class MaterializationJob(SQLModel, table=True):
+    """
+    Materialization Job Table
+    """
+    __tablename__ = "materialization_jobs"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    feature_view_id: UUID = Field(foreign_key="feature_views.id", index=True, ondelete="CASCADE")
+    
+    status: Materialization = Field(sa_column=Column(String(20), default=Materialization.PENDING))
+    
+    start_time: float | None = Field(default=None, sa_column=Column(Float))
+    end_time: float | None = Field(default=None, sa_column=Column(Float))
+    
+    offline_uri: str | None = Field(default=None, sa_column=Column(String(255))) 
+    error_message: str | None = Field(default=None, sa_column=Column(Text))
+
+    updated_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float, onupdate=currentTimeUTC))
+    created_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float))

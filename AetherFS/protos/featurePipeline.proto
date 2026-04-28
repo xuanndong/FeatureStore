@@ -99,6 +99,43 @@ message RunResponse {
 }
 
 
+// Materialization Offline and Online
+message FeatureGroupMeta {
+    string alias = 1;
+    string location_uri = 2;
+    repeated string features = 3;
+}
+
+message MaterializeViewRequest {
+    string job_id = 1;
+    string view_id = 2;
+    string join_key = 3;
+    repeated FeatureGroupMeta feature_groups = 4;
+    string output_uri = 5; // s3://aether-offline-store/materialized/{view_id}/{job_id}/
+    optional string webhook_url = 6;
+}
+
+message MaterializeViewResponse {
+    string job_id = 1;
+    string status = 2;
+    string message = 3;
+}
+
+
+// In-System Execution Request & Response
+message ExecuteScriptRequest {
+    string script_code = 1;
+    repeated string requirements = 2;
+}
+
+message ExecuteScriptResponse {
+    string status = 1; 
+    string logs = 2;   
+    string error_message = 3; 
+    string analytics_json = 4;
+}
+
+
 // Service Interface
 service PipelineService {
     // Quick Formula Test & UI Data Preview
@@ -106,4 +143,10 @@ service PipelineService {
 
     // Persists files to Feature Storage and pushes data to Redis
     rpc RunBatchPipeline (RunRequest) returns (RunResponse);
+
+    // Join file parquet for feature view
+    rpc MaterializeFeatureView (MaterializeViewRequest) returns (MaterializeViewResponse);
+
+    // Run user Python code on Ray Cluster
+    rpc ExecuteUserScript (ExecuteScriptRequest) returns (ExecuteScriptResponse);
 }

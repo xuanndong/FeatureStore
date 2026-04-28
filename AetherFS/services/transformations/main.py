@@ -4,7 +4,8 @@ import json
 import concurrent.futures
 import sys
 import os
-from datetime import datetime
+import time
+import io
 
 # Path processing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -14,6 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.
 import grpc
 from grpc_reflection.v1alpha import reflection
 import ray
+import psutil
 
 # Generated Proto files
 from common.grpc import featurePipeline_pb2 as pb2
@@ -23,11 +25,51 @@ from common.grpc import featurePipeline_pb2_grpc as pb2_grpc
 from common.constants import TransformationType, ReadPolicies, SourceFormat, Materialization
 from common.config import settings
 from core.batchRunner import BatchPipelineRunner
+from core.utils import analytics
 from core import webhook
 
 
 # Logs
 logger = logging.getLogger(__name__)
+
+
+@ray.remote
+def run_script_on_ray_worker(script_code: str):
+    """
+    Execute code, collect Console Logs and Auto-Metrics
+    """    
+    old_stdout = sys.stdout
+    redirected_output = sys.stdout = io.StringIO()
+    
+    error_msg = ""
+    
+    start_time = time.time()
+    process = psutil.Process()
+    start_memory = process.memory_info().rss
+    
+    try:
+        exec(script_code, {"aether_log": analytics})
+    except Exception as e:
+        import traceback
+        error_msg = traceback.format_exc()
+    finally:
+        sys.stdout = old_stdout
+        
+        end_time = time.time()
+        end_memory = process.memory_info().rss
+        
+        exec_time = round(end_time - start_time, 2)
+        mem_used_mb = round((end_memory - start_memory) / (1024 * 1024), 2)
+        
+        analytics.log_scalar("Execution time:", exec_time, "s")
+        analytics.log_scalar("RAM Usage:", max(0, mem_used_mb), "MB")
+
+    return {
+        "status": "FAILED" if error_msg else "SUCCESS",
+        "logs": redirected_output.getvalue(),
+        "error_message": error_msg,
+        "analytics_json": json.dumps(analytics.metrics)
+    }
 
 
 @ray.remote
@@ -49,6 +91,46 @@ def execute_pipeline_in_background(kwargs: dict, feature_group_id: str, webhook_
         worker_logger = logging.getLogger(__name__)
         worker_logger.error(f"Data processing error for {feature_group_id}: {str(e)}")
         webhook.report_status(webhook_url, feature_group_id, Materialization.FAILED.value, f"Error: {str(e)}")
+
+
+@ray.remote
+def execute_view_materialization(kwargs: dict, job_id: str, webhook_url: str):
+    """
+    Execute Feature View merge task
+    """
+    try:
+        webhook.report_job_status(
+            webhook_url=webhook_url, 
+            job_id=job_id, 
+            status=Materialization.RUNNING.value, 
+            message="Started view materialization process..."
+        )
+
+        runner = BatchPipelineRunner()
+
+        output_metadata = runner.run_view(**kwargs)
+
+        row_count = output_metadata.get('row_count', 0)
+        final_uri = output_metadata.get('final_uri', 'Unknown URI')
+
+        msg = f"Successfully materialized view. Saved {row_count} rows to {final_uri}"
+        webhook.report_job_status(
+            webhook_url=webhook_url, 
+            job_id=job_id, 
+            status=Materialization.COMPLETED.value, 
+            message=msg
+        )
+        
+    except Exception as e:
+        worker_logger = logging.getLogger(__name__)
+        worker_logger.error(f"View processing error for job {job_id}: {str(e)}", exc_info=True)
+        
+        webhook.report_job_status(
+            webhook_url=webhook_url, 
+            job_id=job_id, 
+            status=Materialization.FAILED.value, 
+            message=f"System Error: {str(e)}"
+        )
 
 
 class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
@@ -184,6 +266,65 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
         except Exception as e:
             logger.error(f"Run Pipeline Submission Failed: {str(e)}", exc_info=True)
             context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+    def MaterializeFeatureView(self, request, context):
+        logger.info(f"Received Materialize View request for Job: {request.job_id} (View: {request.view_id})")
+        try:
+            feature_groups = [
+                {
+                    "alias": fg.alias,
+                    "location_uri": fg.location_uri,
+                    "features": list(fg.features)
+                }
+                for fg in request.feature_groups
+            ]
+
+            execute_view_materialization.remote(
+                kwargs={
+                    "join_key": request.join_key,
+                    "feature_groups": feature_groups,
+                    "output_uri": request.output_uri
+                },
+                job_id=request.job_id,
+                webhook_url=request.webhook_url if request.HasField("webhook_url") else ""
+            )
+
+            return pb2.MaterializeViewResponse(
+                job_id=request.job_id,
+                status=Materialization.PENDING.value,
+                message="View materialization submitted to Cluster"
+            )
+        except Exception as e:
+            logger.error(f"Materialize View Submission Failed: {str(e)}", exc_info=True)
+            context.abort(grpc.StatusCode.INTERNAL, str(e))
+    
+
+    def ExecuteUserScript(self, request, context):
+        logger.info("Received ExecuteUserScript request for In-System Execution")
+        try:
+            runtime_env = {
+                "pip": list(request.requirements),
+                "env_vars": {
+                    "AWS_ACCESS_KEY_ID": settings.MINIO_ACCESS_KEY,
+                    "AWS_SECRET_ACCESS_KEY": settings.MINIO_SECRET_KEY,
+                    "AWS_ENDPOINT_URL": settings.MINIO_ENDPOINT 
+                }
+            }
+
+            task = run_script_on_ray_worker.options(runtime_env=runtime_env).remote(request.script_code)
+
+            result = ray.get(task)
+
+            return pb2.ExecuteScriptResponse(
+                status=result["status"],
+                logs=result["logs"],
+                error_message=result["error_message"],
+                analytics_json=result["analytics_json"]
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to execute user script: {str(e)}", exc_info=True)
+            context.abort(grpc.StatusCode.INTERNAL, f"Internal Ray Execution Error: {str(e)}")
 
 
 def serve():

@@ -45,3 +45,25 @@ class UDFResponseFormatter:
             }
             
         return payload
+
+
+class AnalyticsTracker:
+    """
+    Data Collection Tool
+    """
+    def __init__(self):
+        self.metrics = {"scalars": [], "charts": []}
+
+    def log_scalar(self, name: str, value: float, unit: str = ""):
+        self.metrics["scalars"].append({"name": name, "value": value, "unit": unit})
+
+    def log_chart(self, chart_type: str, title: str, data: list, x_label: str = "x", y_label: str = "y"):
+        self.metrics["charts"].append({
+            "type": chart_type,
+            "title": title,
+            "x_label": x_label,
+            "y_label": y_label,
+            "data": data
+        })
+
+analytics = AnalyticsTracker()

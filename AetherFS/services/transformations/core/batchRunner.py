@@ -7,9 +7,10 @@ from services.transformations.loaders.batchReader import BatchReader
 from services.transformations.executors.sqlBased import SQLBased
 from services.transformations.executors.udf import RayBased
 from services.transformations.executors.batchAggregations import AggregationBased
-from common.constants import TransformationType, ReadPolicies, SourceFormat, VirtualTable
 from services.transformations.materializers.offlineStore import OfflineStore
 from services.transformations.materializers.onlineStore import OnlineStore
+from services.transformations.core.materialization import FeatureViewMaterializer
+from common.constants import TransformationType, ReadPolicies, SourceFormat, VirtualTable
 
 
 # Logs
@@ -35,6 +36,15 @@ class BatchPipelineRunner:
         if not hasattr(self, '_udf_engine'):
             self._udf_engine = RayBased()
         return self._udf_engine
+
+    @property
+    def view_materializer(self):
+        """
+        Lazy Init for Feature View Materializer
+        """
+        if not hasattr(self, '_view_materializer'):
+            self._view_materializer = FeatureViewMaterializer(sql_engine=self.sql_engine)
+        return self._view_materializer
 
     def _format_preview_table(self, table) -> list[dict]:
         """
@@ -269,3 +279,60 @@ class BatchPipelineRunner:
 
             case _:
                 raise ValueError(f"Invalid transformation type: {transform_type}")
+    
+    def _load_view_datasets(self, feature_groups: list[dict], connection_options: dict | None) -> dict:
+        """
+        Read data from the storage system
+        """
+        datasets_dict = {}
+
+        for fg in feature_groups:
+            alias = fg["alias"]
+            location = fg["location_uri"]
+
+            dataset = self.batch_reader.load_data(
+                location_uri=location,
+                source_format=SourceFormat.PARQUET,
+                connection_options=connection_options,
+                policy=ReadPolicies.FULL_READ
+            )
+
+            if not dataset:
+                raise ValueError(f"No data found for Feature Group '{alias}' at {location}")
+
+            datasets_dict[alias] = dataset
+
+        return datasets_dict
+
+    def run_view(
+        self, 
+        join_key: str, 
+        feature_groups: list[dict], 
+        output_uri: str,
+        connection_options: dict | None = None
+    ) -> dict[str, str | int]:
+        """
+        Orchestrate the Materialization workflow for Feature View
+        """
+        if not feature_groups:
+            logger.warning("No Feature Groups provided. Aborting materialization.")
+            return {}
+
+        datasets_dict = self._load_view_datasets(feature_groups, connection_options)
+
+        with self.view_materializer.execute(
+            datasets_dict=datasets_dict, 
+            join_key=join_key, 
+            feature_groups=feature_groups
+        ) as result_data:
+            
+            result_table = result_data.read_all() if hasattr(result_data, 'read_all') else result_data
+
+            # Offline Store
+            saved_metadata = self.offline_store.save_pyarrow_table(
+                table=result_table, 
+                output_uri=output_uri, 
+                dataset_name="data" 
+            )
+
+            return saved_metadata

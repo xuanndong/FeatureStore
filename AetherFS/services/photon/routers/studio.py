@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import timezone, datetime
 
-# Third Libraries
+# Third party Libraries
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

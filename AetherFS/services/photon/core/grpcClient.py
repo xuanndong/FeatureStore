@@ -37,6 +37,24 @@ class FeatureStoreGRPCClient:
 
         return response
 
+    async def materialize_feature_view(self, request: pb2.MaterializeViewRequest) -> pb2.MaterializeViewResponse:
+        """
+        Trigger feature view materialization task (Non-blocking)
+        """
+        stub = pb2_grpc.PipelineServiceStub(self.channel)
+        response = await stub.MaterializeFeatureView(request, timeout=10.0)
+
+        return response
+
+    async def execute_user_script(self, request: pb2.ExecuteScriptRequest) -> pb2.ExecuteScriptResponse:
+        """
+        Trigger in-system execution task with 1 hour timeout (Blocking)
+        """
+        stub = pb2_grpc.PipelineServiceStub(self.channel)
+        response = await stub.ExecuteUserScript(request, timeout=3600.0)
+
+        return response
+
     async def close(self):
         if self._channel:
             await self._channel.close()
