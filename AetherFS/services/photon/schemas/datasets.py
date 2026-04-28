@@ -2,11 +2,16 @@
 from pydantic import BaseModel, Field
 from typing import Any
 
+# Local Libraries
+from common.constants import DatasetsType
+
 
 class RunScriptPayload(BaseModel):
     """
     Payload cho yêu cầu thực thi mã động
     """
+    dataset_id: str = Field(..., description="ID of Feature Group or View")
+    dataset_type: DatasetsType = Field(..., description="GROUP or VIEW")
     code: str = Field(..., description="Python source code to execute")
     requirements: list[str] = Field(default_factory=list, description="Required pip libraries")
 

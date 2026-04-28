@@ -30,3 +30,4 @@ APScheduler
 
 # --- Webhook Callback ---
 httpx
+pyarrow

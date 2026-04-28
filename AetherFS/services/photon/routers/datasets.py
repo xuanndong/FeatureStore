@@ -190,14 +190,39 @@ async def get_dataset_access_info(
 
 
 @router.post('/experiments', response_model=StandardResponse[ScriptExecutionData])
-async def run_in_system_script(payload: RunScriptPayload):
+async def run_in_system_script(
+    payload: RunScriptPayload,
+    db: AsyncSession = Depends(get_session),
+    version: str = Depends(verify_api_version)
+):
     """
     Execute user script on Ray Cluster
     """
     try:
+        dataset_uri = None
+        if payload.dataset_type == DatasetsType.FEATURE_GROUP:
+            fg = await db.get(FeatureGroup, uuid.UUID(payload.dataset_id))
+
+            if fg: dataset_uri = fg.offline_uri
+        else:
+            query = select(MaterializationJob).where(
+                MaterializationJob.feature_view_id == uuid.UUID(payload.dataset_id),
+                MaterializationJob.status == Materialization.COMPLETED.value
+            ).order_by(MaterializationJob.created_at.desc()).limit(1)
+
+            job = (await db.execute(query)).scalars().first()
+            if job: dataset_uri = job.offline_uri
+
+        if not dataset_uri:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Data path not found"
+            )
+
         request = pb2.ExecuteScriptRequest(
             script_code=payload.code,
-            requirements=payload.requirements
+            requirements=payload.requirements,
+            dataset_uri=dataset_uri
         )
 
         response = await grpc_client.execute_user_script(request)

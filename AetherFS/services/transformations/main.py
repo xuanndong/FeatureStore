@@ -6,6 +6,7 @@ import sys
 import os
 import time
 import io
+import pandas as pd
 
 # Path processing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 @ray.remote
-def run_script_on_ray_worker(script_code: str):
+def run_script_on_ray_worker(script_code: str, dataset_uri: str):
     """
     Execute code, collect Console Logs and Auto-Metrics
     """    
@@ -48,7 +49,13 @@ def run_script_on_ray_worker(script_code: str):
     start_memory = process.memory_info().rss
     
     try:
-        exec(script_code, {"aether_log": analytics})
+        user_context = {
+            "aether_log": analytics,
+            "DATASET_PATH": dataset_uri,
+            "pd": pd
+        }
+
+        exec(script_code, user_context)
     except Exception as e:
         import traceback
         error_msg = traceback.format_exc()
@@ -311,7 +318,10 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
                 }
             }
 
-            task = run_script_on_ray_worker.options(runtime_env=runtime_env).remote(request.script_code)
+            task = run_script_on_ray_worker.options(runtime_env=runtime_env).remote(
+                request.script_code,
+                request.dataset_uri
+            )
 
             result = ray.get(task)
 

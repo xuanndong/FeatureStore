@@ -126,6 +126,7 @@ message MaterializeViewResponse {
 message ExecuteScriptRequest {
     string script_code = 1;
     repeated string requirements = 2;
+    string dataset_uri = 3;
 }
 
 message ExecuteScriptResponse {
