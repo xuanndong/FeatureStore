@@ -77,7 +77,7 @@ class OfflineStore:
         stats = {}
         for col_name in table.column_names:
             col_data = table.column(col_name)
-            null_count = pc.null_count(col_data).as_py()
+            null_count = col_data.null_count
 
             col_stats = {
                 "null_count": null_count,

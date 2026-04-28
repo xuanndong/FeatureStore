@@ -32,6 +32,7 @@ class FeatureViewDetailRead(BaseModel):
     entity_id: UUID
     created_at: float
     features: list[FeatureDiscoveryRead]
+    endpoint_url: str
 
 
 class FeatureViewListRead(BaseModel):

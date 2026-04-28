@@ -121,6 +121,33 @@ class FeatureGroupRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class FeatureInGroupRead(BaseModel):
+    id: UUID
+    name: str
+    data_type: str
+    description: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FeatureGroupDetail(BaseModel):
+    id: UUID
+    name: str
+    version: int
+    status: FeatureGroupStatus
+
+    offline_uri: str
+    
+    updated_at: float | None = None
+    created_at: float | None = None
+
+    features: list[FeatureInGroupRead] = []
+
+    endpoint_url: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class FeatureGroupUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
     status: FeatureGroupStatus | None = None

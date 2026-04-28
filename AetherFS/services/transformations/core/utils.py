@@ -1,4 +1,6 @@
 # Standard Libraries
+import io
+import base64
 import numpy as np
 from typing import Any
 
@@ -47,23 +49,30 @@ class UDFResponseFormatter:
         return payload
 
 
-class AnalyticsTracker:
-    """
-    Data Collection Tool
-    """
+class AnalyticsLogger:
     def __init__(self):
-        self.metrics = {"scalars": [], "charts": []}
+        self.metrics = {"scalars": [], "images": []}
 
-    def log_scalar(self, name: str, value: float, unit: str = ""):
+    def log_scalar(self, name, value, unit=""):
         self.metrics["scalars"].append({"name": name, "value": value, "unit": unit})
 
-    def log_chart(self, chart_type: str, title: str, data: list, x_label: str = "x", y_label: str = "y"):
-        self.metrics["charts"].append({
-            "type": chart_type,
-            "title": title,
-            "x_label": x_label,
-            "y_label": y_label,
-            "data": data
-        })
+    def log_figure(self, title="Biểu đồ"):
+        try:
+            import matplotlib.pyplot as plt
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+            buf.seek(0)
+            
+            img_b64 = base64.b64encode(buf.read()).decode('utf-8')
+            self.metrics["images"].append({
+                "title": title,
+                "data": img_b64
+            })
+            plt.clf()
+        except ImportError:
+            print("Cảnh báo: matplotlib chưa được cài đặt để vẽ biểu đồ.")
+        except Exception as e:
+            print(f"Lỗi khi xuất biểu đồ: {str(e)}")
 
-analytics = AnalyticsTracker()
+
+analytics = AnalyticsLogger()

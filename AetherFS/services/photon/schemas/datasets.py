@@ -26,9 +26,15 @@ class DatasetItem(BaseModel):
 class DatasetAccessInfoData(BaseModel):
     dataset_id: str
     dataset_type: str
-    access_url: str = Field(..., description="Pre-signed URL from MinIO")
+    dataset_uri: str = Field(..., description="URL s3://bucket/path")
+
+    # STS key
+    access_key: str = Field(..., description="STS Access Key")
+    secret_key: str = Field(..., description="STS Secret Key")
+    session_token: str = Field(..., description="STS Session Token")
+
     data_format: str = Field("Apache Parquet", description="Format")
-    expires_at: float = Field(..., description="Expires Time")
+    expires_at: float = Field(..., description="Expires (Timestamp)")
 
 
 class ScriptExecutionData(BaseModel):

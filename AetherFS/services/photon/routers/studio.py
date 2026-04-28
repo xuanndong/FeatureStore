@@ -16,7 +16,7 @@ from common.database.connection import get_session
 from common.grpc import featurePipeline_pb2 as pb2
 from common.constants import Materialization, FeatureGroupStatus
 from common.config import settings
-from services.photon.schemas.studio import FeatureGroupCreate, PreviewRunRequest, StatusPayload, FeatureGroupRead, FeatureGroupUpdate
+from services.photon.schemas.studio import FeatureGroupCreate, PreviewRunRequest, StatusPayload, FeatureGroupRead, FeatureGroupUpdate, FeatureGroupDetail
 from services.photon.core.responses import StandardResponse
 from services.photon.core.dependencies import verify_api_version, PaginationParams
 from services.photon.core.grpcClient import grpc_client
@@ -420,6 +420,45 @@ async def list_feature_groups(
             "pagination": pagination.get_metadata(total)
         }
     )
+
+
+@router.get("/feature-groups/{id}", response_model=StandardResponse[FeatureGroupDetail])
+async def get_feature_group(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_session),
+    version: str = Depends(verify_api_version)
+):
+    """
+    Get Detail
+    """
+    query = (
+        select(FeatureGroup)
+        .where(FeatureGroup.id == id)
+        .options(selectinload(FeatureGroup.features))
+    )
+
+    result = await db.execute(query)
+    fg = result.scalars().first()
+
+    if not fg:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feature group not found"
+        )
+
+    data = FeatureGroupDetail(
+        id=fg.id,
+        name=fg.name,
+        version=fg.version,
+        status=fg.status,
+        offline_uri=fg.offline_uri,
+        updated_at=fg.updated_at,
+        created_at=fg.created_at,
+        features=fg.features,
+        endpoint_url=settings.MINIO_ENDPOINT
+    )
+
+    return StandardResponse(data=data)
 
 
 @router.patch("/feature-groups/{id}", response_model=StandardResponse[dict])

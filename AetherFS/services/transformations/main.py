@@ -6,7 +6,6 @@ import sys
 import os
 import time
 import io
-import pandas as pd
 
 # Path processing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -51,8 +50,7 @@ def run_script_on_ray_worker(script_code: str, dataset_uri: str):
     try:
         user_context = {
             "aether_log": analytics,
-            "DATASET_PATH": dataset_uri,
-            "pd": pd
+            "DATASET_PATH": dataset_uri
         }
 
         exec(script_code, user_context)
@@ -314,7 +312,10 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
                 "env_vars": {
                     "AWS_ACCESS_KEY_ID": settings.MINIO_ACCESS_KEY,
                     "AWS_SECRET_ACCESS_KEY": settings.MINIO_SECRET_KEY,
-                    "AWS_ENDPOINT_URL": settings.MINIO_ENDPOINT 
+                    "AWS_ENDPOINT_URL": settings.MINIO_ENDPOINT,
+                    "S3_ENDPOINT_URL": settings.MINIO_ENDPOINT,
+                    "AWS_REGION": "us-east-1",
+                    "AWS_ALLOW_HTTP": "true"
                 }
             }
 

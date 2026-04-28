@@ -79,9 +79,11 @@ class SQLBased:
                 con.register(table_name, dataset)
                 registered_tables.append(table_name)
 
-            final_query = sql_query
+            clean_sql = sql_query.strip().rstrip(';')
+
+            final_query = clean_sql
             if limit:
-                final_query = f"SELECT * FROM ({sql_query}) LIMIT {limit}"
+                final_query = f"SELECT * FROM ({clean_sql}) LIMIT {limit}"
 
             yield con.sql(final_query).arrow()
         except duckdb.ParserException as e:

@@ -8,8 +8,8 @@ import s3fs
 import grpc
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlmodel import select
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
+import aiobotocore.session
 
 # Local Libraries
 from services.photon.core.responses import StandardResponse
@@ -23,7 +23,7 @@ from services.photon.schemas.datasets import (
 )
 from common.database.models import FeatureGroup, FeatureView, MaterializationJob
 from common.database.connection import get_session
-from common.constants import DatasetsType, Materialization
+from common.constants import DatasetsType, Materialization, FeatureGroupStatus
 from common.config import settings
 from common.grpc import featurePipeline_pb2 as pb2
 
@@ -59,7 +59,8 @@ async def get_ready_datasets(
         # Query Feature Groups
         if dataset_type is None or dataset_type == DatasetsType.FEATURE_GROUP:
             fg_query = select(FeatureGroup).where(
-                FeatureGroup.last_run_status == Materialization.COMPLETED.value
+                FeatureGroup.last_run_status == Materialization.COMPLETED.value,
+                FeatureGroup.status == FeatureGroupStatus.ACTIVE.value
             )
             if search:
                 fg_query = fg_query.where(FeatureGroup.name.ilike(f"%{search}%"))
@@ -71,7 +72,7 @@ async def get_ready_datasets(
                     dataset_id=str(fg.id),
                     name=fg.name, 
                     dataset_type=DatasetsType.FEATURE_GROUP.value,
-                    created_at=ensure_float_timestamp(fg.created_at)
+                    created_at=ensure_float_timestamp(fg.created_at),
                 )
                 raw_results.append(item.model_dump())
 
@@ -93,7 +94,7 @@ async def get_ready_datasets(
                     dataset_id=str(fv.id),
                     name=fv.name,
                     dataset_type=DatasetsType.FEATURE_VIEW.value,
-                    created_at=ensure_float_timestamp(fv.created_at)
+                    created_at=ensure_float_timestamp(fv.created_at),
                 )
                 raw_results.append(item.model_dump())
 
@@ -129,7 +130,7 @@ async def get_dataset_access_info(
     version: str = Depends(verify_api_version)
 ):
     """
-    Generate pre-signed URL for dataset access
+    Generate temporary STS credentials for dataset access
     """
     offline_uri = None
 
@@ -158,26 +159,75 @@ async def get_dataset_access_info(
                 raise HTTPException(status_code=404, detail="No data available")
             offline_uri = job.offline_uri
 
-        # S3 Logic
-        public_endpoint = getattr(settings, "MINIO_PUBLIC_ENDPOINT", settings.MINIO_ENDPOINT)
-        fs = s3fs.S3FileSystem(
-            key=settings.MINIO_ACCESS_KEY,
-            secret=settings.MINIO_SECRET_KEY,
-            client_kwargs={'endpoint_url': public_endpoint}
-        )
+        # Remove error prefixes (in case of redundant 's3://' in DB)
+        clean_uri = offline_uri.replace("s3://", "").strip("/")
 
-        presigned_url = fs.sign(offline_uri, expiration=expires_in)
+        # S3 Logic: Split bucket and directory
+        path_parts = clean_uri.split("/", 1)
+        bucket_name = path_parts[0]
+        prefix = path_parts[1] if len(path_parts) > 1 else ""
+
+        # Create IAM Policy
+        iam_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:ListBucket", 
+                        "s3:GetBucketLocation"
+                    ],
+                    "Resource": [f"arn:aws:s3:::{bucket_name}"]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": ["s3:GetObject"],
+                    "Resource": [
+                        f"arn:aws:s3:::{bucket_name}/{prefix}/*",
+                        f"arn:aws:s3:::{bucket_name}/{prefix}/",
+                        f"arn:aws:s3:::{bucket_name}/{prefix}"
+                    ]
+                }
+            ]
+        }
+
+        # Call AWS STS
+        public_endpoint = getattr(settings, "MINIO_PUBLIC_ENDPOINT", settings.MINIO_ENDPOINT)
+        session = aiobotocore.session.get_session()
+
+        async with session.create_client(
+            'sts',
+            endpoint_url=public_endpoint,
+            aws_access_key_id=settings.MINIO_ACCESS_KEY,
+            aws_secret_access_key=settings.MINIO_SECRET_KEY,
+            region_name='us-east-1'
+        ) as sts_client:
+            response = await sts_client.assume_role(
+                RoleArn="arn:aws:iam::123456789012:role/aether-sts-role", 
+                RoleSessionName=f"session_{str(dataset_id)[:8]}",
+                Policy=json.dumps(iam_policy),
+                DurationSeconds=expires_in
+            )
+        credentials = response['Credentials']
+        clean_uri = offline_uri.replace("s3://", "").strip("/")
+
+        final_dataset_uri = f"s3://{clean_uri}"
+        if not final_dataset_uri.endswith('/'):
+            final_dataset_uri += "/"
 
         access_data = DatasetAccessInfoData(
             dataset_id=str(dataset_id),
             dataset_type=dataset_type.value,
-            access_url=presigned_url,
+            dataset_uri=final_dataset_uri, 
+            access_key=credentials['AccessKeyId'],
+            secret_key=credentials['SecretAccessKey'],
+            session_token=credentials['SessionToken'],
             data_format="Apache Parquet",
-            expires_at=float(datetime.now(timezone.utc).timestamp() + expires_in)
+            expires_at=credentials['Expiration'].timestamp()
         )
 
         return StandardResponse(
-            detail="Pre-signed URL generated successfully",
+            detail="STS Credentials generated successfully",
             data=access_data.model_dump()
         )
     except HTTPException:
@@ -199,11 +249,10 @@ async def run_in_system_script(
     Execute user script on Ray Cluster
     """
     try:
-        dataset_uri = None
+        offline_uri = None
         if payload.dataset_type == DatasetsType.FEATURE_GROUP:
             fg = await db.get(FeatureGroup, uuid.UUID(payload.dataset_id))
-
-            if fg: dataset_uri = fg.offline_uri
+            if fg: offline_uri = fg.offline_uri
         else:
             query = select(MaterializationJob).where(
                 MaterializationJob.feature_view_id == uuid.UUID(payload.dataset_id),
@@ -211,18 +260,26 @@ async def run_in_system_script(
             ).order_by(MaterializationJob.created_at.desc()).limit(1)
 
             job = (await db.execute(query)).scalars().first()
-            if job: dataset_uri = job.offline_uri
+            if job: offline_uri = job.offline_uri
 
-        if not dataset_uri:
+        if not offline_uri:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Data path not found"
             )
 
+        clean_uri = offline_uri.replace("s3://", "").strip("/")
+        final_dataset_uri = f"s3://{clean_uri}"
+        
+        if not final_dataset_uri.endswith('.parquet'):
+            if not final_dataset_uri.endswith('/'):
+                final_dataset_uri += "/"
+            final_dataset_uri += "**/*.parquet"
+
         request = pb2.ExecuteScriptRequest(
             script_code=payload.code,
             requirements=payload.requirements,
-            dataset_uri=dataset_uri
+            dataset_uri=final_dataset_uri
         )
 
         response = await grpc_client.execute_user_script(request)

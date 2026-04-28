@@ -335,7 +335,8 @@ async def get_feature_view_detail(
         ttl_seconds=view.ttl_seconds,
         entity_id=view.entity_id,
         created_at=view.created_at,
-        features=features_list
+        features=features_list,
+        endpoint_url=settings.MINIO_ENDPOINT
     )
 
     return StandardResponse(data=data)
