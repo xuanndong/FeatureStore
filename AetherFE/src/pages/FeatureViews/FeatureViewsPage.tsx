@@ -19,7 +19,7 @@ export const FeatureViewsPage: React.FC = () => {
       {mode === 'list' && (
         <FeatureViewList 
           onCreateNew={() => setMode('create')} 
-          onViewDetail={handleOpenDetail} // Truyền hàm xử lý xuống List
+          onViewDetail={handleOpenDetail}
         />
       )}
 

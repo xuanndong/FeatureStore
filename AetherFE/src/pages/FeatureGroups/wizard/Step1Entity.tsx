@@ -19,9 +19,6 @@ export const Step1Entity: React.FC<Step1EntityProps> = React.memo(({
 }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-    {/* ============================== */}
-    {/* TAB 1: CHỌN THỰC THỂ CÓ SẴN    */}
-    {/* ============================== */}
     <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
       <div
         style={{ 
@@ -33,7 +30,6 @@ export const Step1Entity: React.FC<Step1EntityProps> = React.memo(({
         }}
         onClick={() => { 
           onExpandChange('choose'); 
-          // Giữ lại entity_id cũ (nếu có), đồng thời xóa sạch data bên form Create
           onStepChange({ 
             entity_id: entityStep.entity_id, 
             new_entity_config: undefined 
@@ -63,9 +59,6 @@ export const Step1Entity: React.FC<Step1EntityProps> = React.memo(({
       )}
     </div>
 
-    {/* ============================== */}
-    {/* TAB 2: TẠO THỰC THỂ MỚI        */}
-    {/* ============================== */}
     <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
       <div
         style={{ 
@@ -77,7 +70,6 @@ export const Step1Entity: React.FC<Step1EntityProps> = React.memo(({
         }}
         onClick={() => { 
           onExpandChange('create'); 
-          // Giữ lại form Create cũ (nếu có) hoặc khởi tạo rỗng, đồng thời xóa entity_id đã chọn
           onStepChange({ 
             entity_id: undefined, 
             new_entity_config: entityStep.new_entity_config || { name: '', join_key: '', description: '' } 

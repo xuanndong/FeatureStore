@@ -144,7 +144,7 @@ export const CreateFeatureGroupWizard: React.FC = () => {
   }, [fgName, useOnlineStore, entityStep, sourceStep, transformStep, isScheduled, cronExp, navigate, showNotification]);
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
       
       {/* Come back */}
       <div>

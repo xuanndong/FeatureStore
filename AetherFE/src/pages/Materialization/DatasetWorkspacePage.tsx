@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Terminal, Copy, Play, Loader2, Database, Table2, Layers, Share2, ShieldCheck, Image as ImageIcon } from 'lucide-react';
+import { 
+  Terminal, Copy, Play, Loader2, Database, Table2, 
+  Layers, Share2, ShieldCheck, Image as ImageIcon,
+  CheckCircle2, AlertCircle, Cpu, Clock, Package
+} from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { datasetsApi } from '@/services/datasets';
 import { viewsApi } from '@/services/views';
@@ -19,15 +23,24 @@ export const DatasetWorkspacePage: React.FC = () => {
   const [features, setFeatures] = useState<any[]>([]); 
   const [datasetName, setDatasetName] = useState<string>('Đang tải...');
   const [createdAt, setCreatedAt] = useState<number | null>(null);
-  const [endpointURL, setEndpointURL] = useState<string>("http://localhost:9000")
+  const [endpointURL, setEndpointURL] = useState<string>("http://localhost:9000");
   const [contextLoading, setContextLoading] = useState(false);
 
   // State API Tab
   const [accessInfo, setAccessInfo] = useState<DatasetAccessInfoData | null>(null);
   const [loadingApi, setLoadingApi] = useState(false);
 
-  // MẪU CODE HƯỚNG DẪN CÁCH VẼ BIỂU ĐỒ BẰNG MATPLOTLIB
-  const INITIAL_CODE = `# ---------------------------------------------------------
+  // Init Editor & Execution State
+  const [code, setCode] = useState("");
+  // Requirements
+  const [requirements, setRequirements] = useState("");
+  
+  const [isRunning, setIsRunning] = useState(false);
+  const [execResult, setExecResult] = useState<ScriptExecutionData | null>(null);
+  const [execError, setExecError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updatedCode = `# ---------------------------------------------------------
 # AETHER WORKSPACE - DATA SCIENCE PLATFORM
 # ---------------------------------------------------------
 import s3fs
@@ -40,25 +53,26 @@ def main():
     fs = s3fs.S3FileSystem(client_kwargs={"endpoint_url": "${endpointURL}"})
     
     # 2. Tìm và nạp dữ liệu từ DATASET_PATH (biến đã được hệ thống tiêm vào)
-    files = fs.glob(DATASET_PATH.replace("s3://", "") + "**/*.parquet")
-    df = ds.dataset(files, format="parquet", filesystem=fs).to_table().to_pandas()
+    base_path = DATASET_PATH.replace("s3://", "").rstrip("/") + "/"
+    files = fs.glob(base_path + "**/*.parquet")
     
-    print(f"Dataset loaded: {len(df)} rows")
+    if not files:
+        print("Loi: Khong tim thay du lieu Parquet hop le!")
+        return
+        
+    df = ds.dataset(files, format="parquet", filesystem=fs).to_table().to_pandas()
+    print(f"Dataset loaded successfully: {len(df)} rows")
     
     # VIẾT CODE CỦA BẠN TẠI ĐÂY
-    # Ví dụ: 
-    # aether_log.log_scalar("Metric_Name", 0.95)
-    # plt.plot([1, 2, 3])
-    # aether_log.log_figure("My Plot")
+    # aether_log.log_scalar("Rows", len(df))
 
 if __name__ == "__main__":
     main()
 `;
-
-  const [code, setCode] = useState(INITIAL_CODE);
-  const [isRunning, setIsRunning] = useState(false);
-  const [execResult, setExecResult] = useState<ScriptExecutionData | null>(null);
-  const [execError, setExecError] = useState<string | null>(null);
+    if (!code || code.includes("http://localhost:9000")) {
+      setCode(updatedCode);
+    }
+  }, [endpointURL]);
 
   useEffect(() => {
     if (!datasetId) return;
@@ -110,13 +124,15 @@ if __name__ == "__main__":
     setIsRunning(true);
     setExecResult(null);
     setExecError(null);
+    
+    const reqArray = requirements.split(',').map(r => r.trim()).filter(Boolean);
+
     try {
       const response = await datasetsApi.runExperiment({ 
         dataset_id: datasetId,
         dataset_type: datasetType as any,
         code, 
-        // Yêu cầu thư viện đồ họa
-        requirements: ['pandas', 'scikit-learn', 'matplotlib', 'seaborn'] 
+        requirements: reqArray
       });
       setExecResult(response.data);
     } catch (error: any) {
@@ -140,22 +156,23 @@ fs = s3fs.S3FileSystem(
 )
 
 BASE_URI = "${accessInfo.dataset_uri}"
-search_pattern = BASE_URI.replace("s3://", "") + "**/*.parquet"
+search_pattern = BASE_URI.replace("s3://", "").rstrip("/") + "/**/*.parquet"
 parquet_files = fs.glob(search_pattern)
 
 if parquet_files:
     dataset = ds.dataset(parquet_files, format="parquet", filesystem=fs)
     df = dataset.to_table().to_pandas()
-    print(f"Tổng số dòng: {len(df)}")
+    print(f"Tong so dong: {len(df)}")
     print(df.head())`;
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '40px' }}>
+    <div style={{ maxWidth: '1300px', margin: '0 auto', paddingBottom: '40px' }}>
       <button onClick={() => navigate(-1)} style={{ marginBottom: '24px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, padding: 0 }}>
         &larr; Quay lại Market
       </button>
 
+      {/* METADATA HEADER */}
       <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-color)', marginBottom: '24px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
         <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '24px', color: 'var(--text-main)' }}>Workspace: {datasetName}</h2>
         
@@ -194,6 +211,7 @@ if parquet_files:
         </div>
       </div>
 
+      {/* TABS */}
       <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--border-color)', marginBottom: '24px' }}>
         <button onClick={() => setActiveTab('api')} style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 600, fontSize: '15px', borderBottom: activeTab === 'api' ? '2px solid var(--primary)' : '2px solid transparent', color: activeTab === 'api' ? 'var(--primary)' : 'var(--text-secondary)' }}>
           <Share2 size={18} /> Get Pre-signed URL
@@ -206,15 +224,22 @@ if parquet_files:
       <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
         {activeTab === 'api' ? (
           <div style={{ padding: '32px' }}>
+            {/* S3FS Warning */}
+            <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '14px 16px', borderRadius: '12px', marginBottom: '24px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <AlertCircle size={20} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <div>
+                <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: '#b45309', fontWeight: 600 }}>Yêu cầu thư viện bắt buộc</h4>
+                <p style={{ margin: 0, fontSize: '13px', color: '#92400e', lineHeight: 1.5 }}>
+                  Để đọc dữ liệu từ Feature Store thông qua S3/MinIO, môi trường Python của bạn bắt buộc phải cài đặt <strong>s3fs</strong>. Vui lòng chạy lệnh <code>pip install s3fs pyarrow pandas</code> trước khi thực thi đoạn mã bên dưới.
+                </p>
+              </div>
+            </div>
+
             <div style={{ marginBottom: '24px', display: 'flex', gap: '16px', alignItems: 'center' }}>
               <button 
                 onClick={handleGenerateUrl} 
                 disabled={loadingApi}
-                style={{ 
-                  background: 'var(--primary)', color: '#fff', border: 'none', padding: '10px 20px', 
-                  borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', 
-                  cursor: loadingApi ? 'not-allowed' : 'pointer', fontSize: '14px' 
-                }}
+                style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: loadingApi ? 'not-allowed' : 'pointer', fontSize: '14px' }}
               >
                 {loadingApi ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="#fff" />} Generate Pre-signed URL
               </button>
@@ -224,12 +249,12 @@ if parquet_files:
               <div style={{ animation: 'fadeIn 0.3s ease-in-out' }}>
                 <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', padding: '16px', borderRadius: '12px', marginBottom: '16px' }}>
                   <h4 style={{ color: '#059669', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 8px 0', fontSize: '15px' }}>
-                    <Share2 size={18} /> Thành công! Thông tin xác thực đã được tạo.
+                    <CheckCircle2 size={18} /> Thành công! Thông tin xác thực đã được tạo.
                   </h4>
                   <p style={{ margin: 0, fontSize: '14px', color: '#047857' }}>Hết hạn vào lúc: <strong>{new Date(accessInfo.expires_at * 1000).toLocaleString('vi-VN')}</strong></p>
                 </div>
 
-                <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '14px 16px', borderRadius: '12px', marginBottom: '24px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '14px 16px', borderRadius: '12px', marginBottom: '16px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                   <ShieldCheck size={20} color="#2563eb" style={{ marginTop: '2px', flexShrink: 0 }} />
                   <div>
                     <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: '#1d4ed8', fontWeight: 600 }}>Chính sách bảo mật giới hạn không gian</h4>
@@ -254,29 +279,42 @@ if parquet_files:
             )}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: '650px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: '700px' }}>
+            {/* WORKSPACE HEADER */}
             <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}><Terminal size={16}/> Monaco Workspace</span>
-                <span style={{ fontSize: '12px', color: 'var(--primary)', background: 'var(--primary-light)', padding: '4px 10px', borderRadius: '12px', fontWeight: 600 }}>Python 3.10 • Ray Cluster</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Terminal size={16}/>
+                  <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-main)' }}>Monaco Workspace</span>
+                </div>
+                
+                {/* INPUT REQUIREMENTS */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Package size={16} color="var(--text-secondary)" />
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Pip Packages:</span>
+                  <input 
+                    type="text" 
+                    value={requirements}
+                    onChange={(e) => setRequirements(e.target.value)}
+                    placeholder="pandas, scikit-learn, xgboost==1.7.0"
+                    style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '13px', width: '320px', outline: 'none' }}
+                  />
+                </div>
               </div>
+
               <button 
                 onClick={handleRunCode} 
                 disabled={isRunning} 
-                style={{ 
-                  background: isRunning ? '#cbd5e1' : '#10b981', color: '#fff', border: 'none', 
-                  padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', 
-                  alignItems: 'center', gap: '8px', cursor: isRunning ? 'not-allowed' : 'pointer', 
-                  fontSize: '14px', transition: 'background 0.2s' 
-                }}
+                style={{ background: isRunning ? '#94a3b8' : '#10b981', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 700, cursor: isRunning ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: isRunning ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)', transition: '0.2s' }}
               >
                 {isRunning ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="#fff" />} 
-                {isRunning ? 'Executing...' : 'Run / Plot'}
+                {isRunning ? 'Đang thực thi...' : 'Chạy mã nguồn'}
               </button>
             </div>
             
-            <div style={{ display: 'flex', flex: 1, minHeight: '600px' }}>
-              <div style={{ flex: 1, borderRight: '1px solid var(--border-color)', minWidth: '55%' }}>
+            <div style={{ display: 'flex', flex: 1, minHeight: '650px' }}>
+              {/* EDITOR */}
+              <div style={{ flex: 6.5, borderRight: '1px solid var(--border-color)' }}>
                 <Editor 
                   height="100%" 
                   defaultLanguage="python" 
@@ -287,65 +325,74 @@ if parquet_files:
                 />
               </div>
               
-              <div style={{ flex: 3.5, background: '#1e1e1e', color: '#fff', display: 'flex', flexDirection: 'column', minWidth: '45%' }}>
-                <div style={{ padding: '12px 16px', background: '#2d2d2d', fontSize: '12px', fontWeight: 600, borderBottom: '1px solid #404040', letterSpacing: '0.5px' }}>
+              {/* CONSOLE OUTPUT */}
+              <div style={{ flex: 3.5, background: '#0f172a', color: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '12px 16px', background: '#1e293b', fontSize: '12px', fontWeight: 700, borderBottom: '1px solid #334155', letterSpacing: '0.5px', color: '#94a3b8' }}>
                   CONSOLE OUTPUT & PLOTS
                 </div>
                 
-                <div style={{ padding: '20px', overflowY: 'auto', flex: 1, fontFamily: 'SFMono-Regular, Consolas, monospace', fontSize: '13px', lineHeight: 1.6 }}>
-                  {!execResult && !isRunning && !execError && (
-                     <span style={{ color: '#888' }}><span style={{ color: '#fbbf24' }}>$</span> Sẵn sàng nhận mã... In kết quả hoặc vẽ biểu đồ để xem tại đây.</span>
-                  )}
+                <div style={{ padding: '20px', overflowY: 'auto', flex: 1, fontFamily: 'Fira Code, SFMono-Regular, monospace', fontSize: '13px', lineHeight: 1.6 }}>
+                  
                   {isRunning && (
-                     <span style={{ color: '#60a5fa' }}><span style={{ color: '#fbbf24' }}>$</span> Đang thực thi mã nguồn...</span>
+                    <div style={{ color: '#38bdf8', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Loader2 size={14} className="animate-spin" /> $ Đang cấu hình môi trường & phân bổ task đến Ray Cluster...
+                    </div>
                   )}
+
                   {execError && (
-                     <div style={{ color: '#ef4444', whiteSpace: 'pre-wrap', marginTop: '8px', background: 'rgba(239, 68, 68, 0.1)', padding: '12px', borderRadius: '6px', borderLeft: '3px solid #ef4444' }}>{execError}</div>
+                     <div style={{ color: '#f87171', whiteSpace: 'pre-wrap', marginTop: '8px', background: 'rgba(248, 113, 113, 0.1)', padding: '16px', borderRadius: '8px', borderLeft: '4px solid #ef4444' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: 700 }}>
+                          <AlertCircle size={16} /> LỖI THỰC THI (Runtime Error)
+                        </div>
+                        {execError}
+                     </div>
                   )}
                   
                   {execResult && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                      
-                      {/* 1. HIỂN THỊ TERMINAL LOG CỦA NGƯỜI DÙNG */}
+                      {/* SCALARS */}
+                      {execResult.analytics?.scalars && execResult.analytics.scalars.length > 0 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                           {execResult.analytics.scalars.map((s, idx) => (
+                              <div key={idx} style={{ background: '#1e293b', padding: '12px', borderRadius: '10px', border: '1px solid #334155' }}>
+                                 <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    {s.name.toLowerCase().includes('time') ? <Clock size={12}/> : <Cpu size={12}/>}
+                                    {s.name}
+                                 </div>
+                                 <div style={{ fontSize: '16px', fontWeight: 700, color: '#38bdf8' }}>{s.value} <span style={{ fontSize: '12px', color: '#64748b' }}>{s.unit || ''}</span></div>
+                              </div>
+                           ))}
+                        </div>
+                      )}
+
+                      {/* TEXT LOGS */}
                       {execResult.logs && execResult.logs.trim() !== "" && (
-                        <div style={{ background: '#000', borderRadius: '8px', border: '1px solid #333', overflow: 'hidden' }}>
-                          <div style={{ background: '#1a1a1a', padding: '8px 16px', fontSize: '11px', color: '#888', borderBottom: '1px solid #333' }}>
-                              STDOUT / STDERR
+                        <div style={{ background: '#000', borderRadius: '10px', border: '1px solid #1e293b', overflow: 'hidden' }}>
+                          <div style={{ background: '#1e293b', padding: '6px 12px', fontSize: '10px', color: '#94a3b8' }}>
+                              STDOUT
                           </div>
                           <div style={{ padding: '16px' }}>
-                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#e5e5e5' }}>
+                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#e2e8f0', fontSize: '12px' }}>
                               {execResult.logs}
                             </pre>
                           </div>
                         </div>
                       )}
                       
-                      {/* 2. HIỂN THỊ CÁC THÔNG SỐ ĐO LƯỜNG CƠ BẢN (Time, RAM) */}
-                      {execResult.analytics?.scalars && execResult.analytics.scalars.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-                           {execResult.analytics.scalars.map((s, idx) => (
-                              <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', padding: '10px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                 <div style={{ fontSize: '11px', color: '#a3a3a3', textTransform: 'uppercase' }}>{s.name}</div>
-                                 <div style={{ fontSize: '15px', fontWeight: 600, color: '#10b981' }}>{s.value} <span style={{ fontSize: '12px' }}>{s.unit || ''}</span></div>
-                              </div>
-                           ))}
-                        </div>
-                      )}
-
-                      {/* 3. HIỂN THỊ BIỂU ĐỒ HÌNH ẢNH (BASE64 TỪ MATPLOTLIB) */}
+                      {/* IMAGES */}
                       {execResult.analytics?.images && execResult.analytics.images.length > 0 && (
-                         <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed #404040' }}>
-                            <strong style={{ color: '#60a5fa', fontSize: '14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <ImageIcon size={18} /> Kết quả Biểu đồ (Plots)
+                         <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed #334155' }}>
+                            <strong style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <ImageIcon size={14} /> GENERATED PLOTS ({execResult.analytics.images.length})
                             </strong>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                {execResult.analytics.images.map((img: any, idx: number) => (
-                                 <div key={idx} style={{ background: '#fff', borderRadius: '8px', padding: '16px', textAlign: 'center' }}>
-                                    {img.title && <h5 style={{ color: '#333', margin: '0 0 12px 0', fontSize: '14px' }}>{img.title}</h5>}
+                                 <div key={idx} style={{ background: '#fff', borderRadius: '8px', padding: '12px', textAlign: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
+                                    {img.title && <h5 style={{ color: '#1e293b', margin: '0 0 10px 0', fontSize: '13px' }}>{img.title}</h5>}
                                     <img 
                                       src={`data:image/png;base64,${img.data}`} 
                                       alt={img.title || 'Plot'} 
-                                      style={{ maxWidth: '100%', height: 'auto', borderRadius: '4px', border: '1px solid #eee' }} 
+                                      style={{ maxWidth: '100%', height: 'auto', borderRadius: '4px' }} 
                                     />
                                  </div>
                                ))}
@@ -353,14 +400,23 @@ if parquet_files:
                          </div>
                       )}
 
-                      {/* 4. EDGE CASE: KHÔNG CÓ LOGS VÀ KHÔNG CÓ ẢNH */}
+                      {/* NO OUTPUT */}
                       {(!execResult.logs || execResult.logs.trim() === "") && (!execResult.analytics?.images || execResult.analytics.images.length === 0) && (
-                        <div style={{ color: '#888', fontStyle: 'italic', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
-                          Tiến trình chạy thành công nhưng không tạo ra thông điệp (print) hay biểu đồ nào.
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#475569' }}>
+                          <CheckCircle2 size={32} style={{ opacity: 0.2, marginBottom: '12px', margin: '0 auto' }} />
+                          <p style={{ margin: 0, fontSize: '13px', fontStyle: 'italic' }}>Thực thi hoàn tất (Không có output log hay biểu đồ nào).</p>
                         </div>
                       )}
                     </div>
                   )}
+
+                  {!execResult && !isRunning && !execError && (
+                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', opacity: 0.3 }}>
+                       <Terminal size={48} />
+                       <p style={{ marginTop: '16px', fontSize: '13px' }}>Nhấn Run Code để bắt đầu...</p>
+                    </div>
+                  )}
+
                 </div>
               </div>
             </div>

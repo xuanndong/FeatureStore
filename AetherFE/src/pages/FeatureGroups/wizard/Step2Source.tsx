@@ -38,7 +38,7 @@ export const Step2Source: React.FC<Step2SourceProps> = React.memo(({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* --- Choose Existing Source (Giữ nguyên) --- */}
+      {/* --- Choose Existing Source --- */}
       <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
         <div
           style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', background: sourceExpand === 'choose' ? 'var(--surface-hover)' : 'transparent' }}
@@ -131,7 +131,7 @@ export const Step2Source: React.FC<Step2SourceProps> = React.memo(({
                 />
               </div>
 
-              {/* S3 Credentials - Chỉ hiển thị khi chọn S3 */}
+              {/* S3 Credentials */}
               {protocol === 's3' && (
                 <>
                   <div style={{ gridColumn: '1 / -1' }}>

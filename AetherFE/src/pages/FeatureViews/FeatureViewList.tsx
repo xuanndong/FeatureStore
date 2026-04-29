@@ -172,7 +172,7 @@ export const FeatureViewList: React.FC<Props> = ({ onCreateNew, onViewDetail }) 
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Database size={12} /> ĐẶC TRƯNG
                     </span>
-                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{v.feature_count}</span>
+                    {/* <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{v.feature_count}</span> */}
                   </div>
                   <div style={{ width: '1px', background: 'var(--border)' }}></div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
