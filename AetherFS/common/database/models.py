@@ -75,6 +75,11 @@ class Transformation(SQLModel, table=True):
     t_type: TransformationType = Field(sa_column=Column(String(20))) # SQL, PYTHON_UDF, AGGREGATION
 
     definition: str = Field(sa_column=Column(Text, nullable=False))
+    requirements: list[str] | None = Field(
+        default=None, 
+        sa_column=Column(JSONB),
+        description="List of pip libraries required for this transformation"
+    )
     content_hash: str = Field(index=True, max_length=64, description="SHA-256 hash of type and definition")
 
     window_config: dict | None = Field(default=None, sa_column=Column(JSONB))

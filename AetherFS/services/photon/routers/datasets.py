@@ -270,11 +270,9 @@ async def run_in_system_script(
 
         clean_uri = offline_uri.replace("s3://", "").strip("/")
         final_dataset_uri = f"s3://{clean_uri}"
-        
-        if not final_dataset_uri.endswith('.parquet'):
-            if not final_dataset_uri.endswith('/'):
-                final_dataset_uri += "/"
-            final_dataset_uri += "**/*.parquet"
+
+        if not final_dataset_uri.endswith('/'):
+            final_dataset_uri += "/"
 
         request = pb2.ExecuteScriptRequest(
             script_code=payload.code,

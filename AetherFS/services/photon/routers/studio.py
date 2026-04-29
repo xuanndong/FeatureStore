@@ -83,7 +83,8 @@ async def preview_transformation(
     )
 
     if payload.requirements:
-        grpc_req.requirements.extend(payload.requirements)
+        clean_preview_reqs = [r.strip() for r in payload.requirements if r.strip()]
+        grpc_req.requirements.extend(clean_preview_reqs)
 
     try:
         grpc_res = await grpc_client.get_preview(grpc_req)
@@ -187,10 +188,12 @@ async def create_feature_group(
             source_format = source.source_format
             connection_options_json = json.dumps(source.connection_options) if source.connection_options else ""
 
+        clean_reqs = sorted([r.strip() for r in (payload.requirements or []) if r.strip()])
         content_hash = generate_strict_hash(
             payload.transform_type.value, 
             payload.transform_definition, 
-            payload.features
+            payload.features,
+            clean_reqs
         )
 
         existing_transform = await db.scalar(
@@ -211,6 +214,7 @@ async def create_feature_group(
                 name=payload.transformation_name,
                 t_type=payload.transform_type,
                 definition=payload.transform_definition,
+                requirements=clean_reqs,
                 content_hash=content_hash
             )
 
@@ -287,8 +291,8 @@ async def create_feature_group(
             webhook_url=settings.WEBHOOK_URL # webhook url
         )
 
-        if payload.requirements:
-            run_req.requirements.extend(payload.requirements)
+        if clean_reqs:
+            run_req.requirements.extend(clean_reqs)
 
         run_res = await grpc_client.run_pipeline(run_req)
         new_fg.last_run_status = run_res.status

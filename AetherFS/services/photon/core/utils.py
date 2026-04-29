@@ -106,12 +106,15 @@ def calculate_next_run(interval: str, from_time: datetime = None) -> float:
     return next_time.timestamp()
 
 
-def generate_strict_hash(t_type: str, definition: str, features: list) -> str:
+def generate_strict_hash(t_type: str, definition: str, features: list, requirements: list[str] = None) -> str:
     clean_code = re.sub(r'\s+', '', definition)
 
     feature_strings = [f"{f.name}:{f.data_type}" for f in features]
     feature_strings.sort() 
     clean_features = ",".join(feature_strings)
 
-    raw_content = f"{t_type}|{clean_code}|{clean_features}"
+    req_string = ",".join(requirements) if requirements else ""
+
+    raw_content = f"{t_type}|{clean_code}|{clean_features}|{req_string}"
+
     return hashlib.sha256(raw_content.encode('utf-8')).hexdigest()

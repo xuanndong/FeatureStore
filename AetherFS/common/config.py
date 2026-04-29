@@ -36,6 +36,9 @@ class Settings:
     # Webhook
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "http://localhost:8000/api/v1/webhook/status")
 
+    # Timeout
+    EXECUTION_TIMEOUT = int = int(os.getenv("EXECUTION_TIMEOUT", 3600))
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT.lower() in ["production", "prod"]

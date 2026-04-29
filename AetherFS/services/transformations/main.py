@@ -50,7 +50,8 @@ def run_script_on_ray_worker(script_code: str, dataset_uri: str):
     try:
         user_context = {
             "aether_log": analytics,
-            "DATASET_PATH": dataset_uri
+            "DATASET_PATH": dataset_uri,
+            "__name__": "__main__"
         }
 
         exec(script_code, user_context)
@@ -307,8 +308,9 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
     def ExecuteUserScript(self, request, context):
         logger.info("Received ExecuteUserScript request for In-System Execution")
         try:
+            clean_reqs = [r.strip() for r in request.requirements if r.strip()]
             runtime_env = {
-                "pip": list(request.requirements),
+                "pip": clean_reqs,
                 "env_vars": {
                     "AWS_ACCESS_KEY_ID": settings.MINIO_ACCESS_KEY,
                     "AWS_SECRET_ACCESS_KEY": settings.MINIO_SECRET_KEY,
@@ -319,12 +321,16 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
                 }
             }
 
-            task = run_script_on_ray_worker.options(runtime_env=runtime_env).remote(
+            task = run_script_on_ray_worker.options(
+                runtime_env=runtime_env,
+                # num_cpus=1,
+                # memory=2 * 1024 * 1024 * 1024 # 2GB
+            ).remote(
                 request.script_code,
                 request.dataset_uri
             )
 
-            result = ray.get(task)
+            result = ray.get(task, timeout=settings.EXECUTION_TIMEOUT)
 
             return pb2.ExecuteScriptResponse(
                 status=result["status"],
@@ -332,10 +338,20 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
                 error_message=result["error_message"],
                 analytics_json=result["analytics_json"]
             )
-
+        except ray.exceptions.RuntimeEnvSetupError as e:
+            return pb2.ExecuteScriptResponse(
+                status="FAILED",
+                error_message=f"Library setup error: {str(e)}"
+            )
+        except ray.exceptions.GetTimeoutError:
+            ray.cancel(task, force=True)
+            return pb2.ExecuteScriptResponse(
+                status="FAILED",
+                error_message="Execution timed out"
+            )
         except Exception as e:
-            logger.error(f"Failed to execute user script: {str(e)}", exc_info=True)
-            context.abort(grpc.StatusCode.INTERNAL, f"Internal Ray Execution Error: {str(e)}")
+            logger.error(f"Fatal error: {str(e)}", exc_info=True)
+            context.abort(grpc.StatusCode.INTERNAL, f"Internal Error: {str(e)}")
 
 
 def serve():
