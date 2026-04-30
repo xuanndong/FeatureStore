@@ -25,9 +25,15 @@ export interface StandardResponse<T> {
 }
 
 // --- Entity ---
-export interface EntityOption { id: string; name: string; }
+export interface EntityOption { 
+  id: string;
+  name: string;
+  join_key: string
+}
 export interface Entity {
-  id: string; name: string; join_key: string;
+  id: string;
+  name: string;
+  join_key: string;
   description: string | null; updated_at: number; created_at: number;
 }
 export interface EntityCreate { name: string; join_key: string; description?: string; }
@@ -171,6 +177,7 @@ export interface FeatureDiscovery {
   data_type: string;
   group_id: string; 
   group_name: string;
+  group_version: string;
   entity_id: string;
   entity_name: string;
 }
@@ -277,6 +284,18 @@ export interface ScalarMetric {
 export interface AnalyticsData {
   scalars?: AnalyticsScalar[];
   images?: AnalyticsImage[];
+}
+
+export interface MaterializationJob {
+  id: string;
+  feature_view_id: string;
+  status: Materialization;
+  offline_uri: string;
+  error_message?: string;
+  start_time?: number;
+  end_time?: number;
+  updated_at: number;
+  created_at: number;
 }
 
 export interface ScriptExecutionData {

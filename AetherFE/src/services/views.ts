@@ -4,7 +4,8 @@ import type {
   FeatureDiscovery, 
   FeatureViewCreate, 
   FeatureView,
-  FeatureViewUpdate
+  FeatureViewUpdate,
+  MaterializationJob
 } from '@/types';
 
 // Bạn có thể định nghĩa interface này ngay đây hoặc đưa vào file types.ts dùng chung
@@ -21,11 +22,13 @@ export interface PaginatedResult<T> {
 }
 
 export const viewsApi = {
-  listAvailableFeatures: (search?: string, entityId?: string): Promise<StandardResponse<FeatureDiscovery[]>> => {
+  listAvailableFeatures: (search?: string, entityId?: string, page: number = 1, limit: number = 10): Promise<StandardResponse<PaginatedResult<FeatureDiscovery>>> => {
     return apiClient.get('/views/available-features', { 
       params: { 
         search, 
-        entity_id: entityId
+        entity_id: entityId,
+        page,
+        page_size: limit
       } 
     });
   },
@@ -50,5 +53,21 @@ export const viewsApi = {
 
   deleteFeatureView: (id: string): Promise<StandardResponse<any>> => {
     return apiClient.delete(`/views/feature-views/${id}`);
+  },
+
+  listMaterializationJobs: (
+    featureViewId?: string,
+    executionStatus?: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<StandardResponse<PaginatedResult<MaterializationJob>>> => {
+    return apiClient.get('/views/materialization-jobs', {
+      params: {
+        feature_view_id: featureViewId,
+        execution_status: executionStatus,
+        page,
+        page_size: limit
+      }
+    });
   }
 };

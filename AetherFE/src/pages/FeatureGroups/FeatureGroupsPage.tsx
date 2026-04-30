@@ -126,7 +126,7 @@ export const FeatureGroupsPage: React.FC = () => {
                       <td>{row.is_scheduled ? 'True' : 'False'}</td>
                       <td><StatusBadge status={row.status} /></td>
                       <td><StatusBadge execution={row.last_run_status} /></td>
-                      <td style={{ color: 'var(--text-secondary)' }}>{formatDate(row.next_run_at)}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{row.next_run_at ? formatDate(row.next_run_at) : '-'}</td>
                       <td style={{ color: 'var(--text-secondary)' }}>{formatDate(row.updated_at)}</td>
                     </tr>
                   ))

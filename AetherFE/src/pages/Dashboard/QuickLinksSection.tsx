@@ -27,9 +27,9 @@ export const QuickLinksSection: React.FC<QuickLinksGridProps> = ({ items, onNavi
             Bắt đầu quy trình làm việc với các công cụ cốt lõi.
           </p>
         </div>
-        <button className="btn btn-primary" style={{ background: '#818cf8', padding: '1rem' }}>
+        {/* <button className="btn btn-primary" style={{ background: '#818cf8', padding: '1rem' }}>
           Clusters Management
-        </button>
+        </button> */}
       </div>
 
       <div

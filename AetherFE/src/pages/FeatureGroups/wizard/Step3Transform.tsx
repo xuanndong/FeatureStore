@@ -218,7 +218,14 @@ class TabularProcessor:
 
         return df`,
 
-  SQL: `SELECT 
+  SQL: `-- =====================================================================
+-- BIẾN ĐỔI DỮ LIỆU BẢNG VỚI SQL
+-- =====================================================================
+-- BẮT BUỘC: Phải SELECT cột sử dụng làm join key (vd: user_id) để ghép nối dữ liệu
+
+SELECT
+    -- Example
+    user_id,             -- Thay 'user_id' bằng cột Join Key thực tế của bạn
     COUNT(*) as total_records,
     MAX(amount) as max_amount,
     MIN(amount) as min_amount

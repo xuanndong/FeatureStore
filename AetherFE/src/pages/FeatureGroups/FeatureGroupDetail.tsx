@@ -4,8 +4,8 @@ import { Clock, Info, CheckCircle, XCircle, Code2, Settings } from 'lucide-react
 import { studioApi } from '@/services/studio';
 import { useNotification } from '@/components/ui/Notification';
 import { Toggle } from '@/components/ui/Toggle';
-import { FeatureGroupFeatures } from './FeatureGroupFeatures';
 import type { FeatureGroup, FeatureGroupStatus, ScheduleInterval } from '@/types';
+import { FeatureGroupFeatures } from '@/pages/FeatureGroups/FeatureGroupFeatures';
 
 export const FeatureGroupDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -75,25 +75,39 @@ export const FeatureGroupDetail: React.FC = () => {
   if (!featureGroup) return null;
 
   return (
-    // Responsive container
     <div style={{ 
       display: 'flex', 
-      flexWrap: 'wrap', 
-      height: 'calc(100vh - var(--topbar-height))', 
+      flex: 1,
+      height: '100%',
+      minHeight: 0,
+      width: '100%',
       background: 'var(--bg)',
-      overflowY: 'auto'
+      overflow: 'hidden'
     }}>
       
       {/* LEFT: Features List (Sidebar) */}
-      <div style={{ flex: '1 1 240px', maxWidth: '300px', minWidth: '240px', borderRight: '1px solid var(--border)' }}>
+      <div style={{ 
+        flex: '0 0 300px',
+        height: '100%', 
+        borderRight: '1px solid var(--border)',
+        overflowY: 'auto',
+        background: 'var(--surface)'
+      }}>
         <FeatureGroupFeatures groupId={featureGroup.id} />
       </div>
 
       {/* RIGHT: Main Content */}
-      <div style={{ flex: '3 1 600px', padding: '32px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ 
+        flex: 1, 
+        padding: '32px', 
+        display: 'flex', 
+        flexDirection: 'column',
+        height: '100%',
+        overflowY: 'auto'
+      }}>
         
         {/* Header Area */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px', flexShrink: 0 }}>
           <div>
             <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '8px' }}>{featureGroup.name}</h1>
             <p style={{ color: 'var(--text-secondary)' }}>Phiên bản: v{featureGroup.version}</p>
@@ -107,7 +121,7 @@ export const FeatureGroupDetail: React.FC = () => {
         </div>
 
         {/* Tabs Navigation */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', gap: '32px' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', gap: '32px', flexShrink: 0 }}>
           <button 
             onClick={() => setActiveTab('config')}
             style={{ 
@@ -200,7 +214,7 @@ export const FeatureGroupDetail: React.FC = () => {
 
         {/* TAB CONTENT: TRANSFORMATION */}
         {activeTab === 'transformation' && (
-          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '15px', fontWeight: 600 }}>Mã nguồn logic</h3>
@@ -211,13 +225,6 @@ export const FeatureGroupDetail: React.FC = () => {
                 <span className="badge" style={{ background: 'var(--surface)', padding: '6px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '12px' }}>
                   {featureGroup.transformation?.t_type || 'SQL'}
                 </span>
-                
-                {/* <button 
-                  className="btn btn-secondary"
-                  onClick={() => navigate(`/transformations?id=${featureGroup.transformation_id}`)}
-                >
-                  <Code2 size={16} /> Edit in Studio
-                </button> */}
               </div>
             </div>
             

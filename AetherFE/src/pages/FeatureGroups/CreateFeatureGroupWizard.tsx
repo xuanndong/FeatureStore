@@ -40,11 +40,23 @@ export const CreateFeatureGroupWizard: React.FC = () => {
   const [sourceExpand, setSourceExpand] = useState<'choose' | 'create' | null>('choose');
   const [isCheckingSource, setIsCheckingSource] = useState(false);
 
+  const SQL = `-- =====================================================================
+-- BIẾN ĐỔI DỮ LIỆU BẢNG VỚI SQL
+-- =====================================================================
+-- BẮT BUỘC: Phải SELECT cột sử dụng làm join key (vd: user_id) để ghép nối dữ liệu
+
+SELECT
+    -- Example
+    user_id,             -- Thay 'user_id' bằng cột Join Key thực tế của bạn
+    COUNT(*) as total_records,
+    MAX(amount) as max_amount,
+    MIN(amount) as min_amount
+FROM source_data;`;
   // --- Step 3: Transformation ---
   const [transformStep, setTransformStep] = useState<WizardTransformStep>({
     transformation_name: '', 
     transform_type: 'SQL',
-    transform_definition: '-- Viết logic biến đổi SQL tại đây\nSELECT * FROM source_data;',
+    transform_definition: SQL,
     previewOk: false
   });
   const [isPreviewing, setIsPreviewing] = useState(false);
