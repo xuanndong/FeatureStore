@@ -57,6 +57,7 @@ class FeatureViewMaterializer:
         with self.sql_engine.execute(
             dataset=datasets_dict,
             sql_query=sql_query,
+            join_key=join_key,
             table_name="feature_view_temp"
         ) as result_data:
             yield result_data

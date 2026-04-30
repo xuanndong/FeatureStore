@@ -56,14 +56,14 @@ async def preview_transformation(
 
         location_uri = source.location_uri
         source_format = source.source_format
-        connection_options_json = json.dumps(source.connection_options) if source.connection_options else ""
+        connection_options_json = json.dumps(source.connection_options, default=str) if source.connection_options else ""
 
     # User has just created a new data source
     elif payload.new_source_config:
         cfg = payload.new_source_config
         location_uri = cfg.location_uri
         source_format = cfg.source_format
-        connection_options_json = json.dumps(cfg.connection_options) if cfg.connection_options else ""
+        connection_options_json = json.dumps(cfg.connection_options, default=str) if cfg.connection_options else ""
 
     # Mapping enum
     format_name = source_format.name if hasattr(source_format, 'name') else str(source_format).upper()
@@ -139,6 +139,8 @@ async def create_feature_group(
         final_entity_id = payload.entity_id
         final_source_id = payload.source_id
 
+        join_key = None
+
         # Resolve entity
         if payload.new_entity_config:
             if await db.scalar(select(Entity.id).where(Entity.name == payload.new_entity_config.name)):
@@ -152,6 +154,15 @@ async def create_feature_group(
             db.add(new_entity)
             await db.flush() # Generate ID without committing
             final_entity_id = new_entity.id
+            join_key = new_entity.join_key
+        else:
+            existing_entity = await db.get(Entity, final_entity_id)
+            if not existing_entity:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Entity not found"
+                )
+            join_key = existing_entity.join_key
 
         # Resolve data source
         location_uri = ""
@@ -174,7 +185,7 @@ async def create_feature_group(
             final_source_id = new_source.id
             location_uri = new_source.location_uri
             source_format = new_source.source_format
-            connection_options_json = json.dumps(new_source.connection_options) if new_source.connection_options else ""
+            connection_options_json = json.dumps(new_source.connection_options, default=str) if new_source.connection_options else ""
 
         else:
             source = await db.get(DataSource, final_source_id)
@@ -186,7 +197,7 @@ async def create_feature_group(
 
             location_uri = source.location_uri
             source_format = source.source_format
-            connection_options_json = json.dumps(source.connection_options) if source.connection_options else ""
+            connection_options_json = json.dumps(source.connection_options, default=str) if source.connection_options else ""
 
         clean_reqs = sorted([r.strip() for r in (payload.requirements or []) if r.strip()])
         content_hash = generate_strict_hash(
@@ -288,7 +299,8 @@ async def create_feature_group(
             transform_definition=payload.transform_definition,
             connection_options_json=connection_options_json,
             feature_group_id=str(new_fg_id),
-            webhook_url=settings.WEBHOOK_URL # webhook url
+            webhook_url=settings.WEBHOOK_URL, # webhook url
+            join_key=join_key
         )
 
         if clean_reqs:

@@ -79,7 +79,7 @@ class AggregationBased:
         return f"SELECT \n    {select_sql} \nFROM {table_name}"
 
     @contextmanager
-    def execute(self, dataset: ds.Dataset | pa.Table, entity_keys: list[str], time_column: str, features: list[dict], windows: list[str], table_name: str = VirtualTable.SOURCE_DATA.value, limit: int | None = None):
+    def execute(self, dataset: ds.Dataset | pa.Table, entity_keys: list[str], time_column: str, features: list[dict], windows: list[str], join_key: str | None = None, table_name: str = VirtualTable.SOURCE_DATA.value, limit: int | None = None):
         """
         Executes the generated aggregation query securely using DuckDB
         """

@@ -53,6 +53,7 @@ class SQLBased:
         self,
         dataset: ds.Dataset | pa.Table | dict[str, ds.Dataset],
         sql_query: str,
+        join_key: str = None,
         table_name: str = VirtualTable.SOURCE_DATA.value,
         limit: int | None = None
     ) -> pa.Table:
@@ -85,11 +86,20 @@ class SQLBased:
             if limit:
                 final_query = f"SELECT * FROM ({clean_sql}) LIMIT {limit}"
 
-            yield con.sql(final_query).arrow()
+            relation = con.sql(final_query)
+
+            if join_key and join_key not in relation.columns:
+                raise ValueError(
+                    f"SQL Execution Error: Query result is missing the join key column '{join_key}'. Please verify your SELECT statement to ensure this column is included in the output"
+                )
+
+            yield relation.arrow()
         except duckdb.ParserException as e:
             raise ValueError(f"SQL Syntax Error: {str(e)}")
         except duckdb.BinderException as e:
             raise ValueError(f"Undefined table or column: '{str(table_name)}'. Details: {str(e)}")
+        except ValueError as e:
+            raise e
         except Exception as e:
             raise RuntimeError(f"Failed to execute SQL query: {str(e)}")
         finally:

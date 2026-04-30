@@ -2,6 +2,9 @@
 import logging
 import base64
 
+# Third party Libraries
+import pyarrow.dataset as ds
+
 # Local Libraries
 from services.transformations.loaders.batchReader import BatchReader
 from services.transformations.executors.sqlBased import SQLBased
@@ -10,6 +13,7 @@ from services.transformations.executors.batchAggregations import AggregationBase
 from services.transformations.materializers.offlineStore import OfflineStore
 from services.transformations.materializers.onlineStore import OnlineStore
 from services.transformations.core.materialization import FeatureViewMaterializer
+from services.transformations.core.storage import FsspecClient
 from common.constants import TransformationType, ReadPolicies, SourceFormat, VirtualTable
 
 
@@ -72,7 +76,7 @@ class BatchPipelineRunner:
             formatted_records.append(clean_row)
 
         return formatted_records
-    
+
     def preview(
         self,
         location_uri: str,
@@ -180,7 +184,8 @@ class BatchPipelineRunner:
         features_config: list[dict] | None = None,
         windows: list[str] | None = None,
         sync_online: bool = False,
-        time_to_live: int | None = None
+        time_to_live: int | None = None,
+        join_key: str | None = None
     ) -> dict[str, str]:
         """
         Start pipeline
@@ -206,6 +211,7 @@ class BatchPipelineRunner:
                     udf_code=transform_definition,
                     output_uri=output_uri,
                     source_format=source_format,
+                    join_key=join_key,
                     time_to_live=time_to_live,
                     requirements=requirements,
                     connection_options=connection_options,
@@ -225,7 +231,8 @@ class BatchPipelineRunner:
                     with self.sql_engine.execute(
                         dataset=data,
                         sql_query=transform_definition,
-                        table_name=ds_name
+                        join_key=join_key,
+                        table_name=ds_name,
                     ) as result_data:
                         result_table = result_data.read_all() if hasattr(result_data, 'read_all') else result_data
 
@@ -257,6 +264,7 @@ class BatchPipelineRunner:
                         entity_keys=entity_keys,
                         time_column=time_column,
                         features=features_config,
+                        join_key=join_key,
                         windows=windows,
                         table_name=ds_name
                     ) as result_data:
@@ -279,7 +287,7 @@ class BatchPipelineRunner:
 
             case _:
                 raise ValueError(f"Invalid transformation type: {transform_type}")
-    
+
     def _load_view_datasets(self, feature_groups: list[dict], connection_options: dict | None) -> dict:
         """
         Read data from the storage system
@@ -290,16 +298,23 @@ class BatchPipelineRunner:
             alias = fg["alias"]
             location = fg["location_uri"]
 
-            dataset = self.batch_reader.load_data(
-                location_uri=location,
-                source_format=SourceFormat.PARQUET,
-                connection_options=connection_options,
-                policy=ReadPolicies.FULL_READ
+            storage = FsspecClient(uri=location, connection_options=connection_options)
+            raw_fs = storage.get_raw_fs()
+
+            scheme_prefix = f"{storage.scheme}://" if storage.scheme else ""
+            base_path = location.replace(scheme_prefix, "").rstrip("/")
+            search_pattern = f"{base_path}/**/*.parquet"
+
+            parquet_files = raw_fs.glob(search_pattern)
+            if not parquet_files:
+                raise ValueError(f"No Parquet data found for Feature Group '{alias}' at {location}")
+
+            dataset = ds.dataset(
+                source=parquet_files,
+                filesystem=raw_fs,
+                format=ds.ParquetFileFormat()
             )
-
-            if not dataset:
-                raise ValueError(f"No data found for Feature Group '{alias}' at {location}")
-
+            
             datasets_dict[alias] = dataset
 
         return datasets_dict
@@ -318,10 +333,10 @@ class BatchPipelineRunner:
             logger.warning("No Feature Groups provided. Aborting materialization.")
             return {}
 
-        datasets_dict = self._load_view_datasets(feature_groups, connection_options)
+        datasets_to_process = self._load_view_datasets(feature_groups, connection_options)
 
         with self.view_materializer.execute(
-            datasets_dict=datasets_dict, 
+            datasets_dict=datasets_to_process, 
             join_key=join_key, 
             feature_groups=feature_groups
         ) as result_data:

@@ -8,7 +8,7 @@ from sqlmodel import select, func
 
 # Local Libraries
 from common.database.models import Entity, DataSource
-from services.photon.schemas.registry import EntityCreate, EntityRead, DataSourceCreate, DataSourceRead, EntityUpdate, DataSourceUpdate, ConnectionTestRequest, OptionRead
+from services.photon.schemas.registry import EntityCreate, EntityRead, DataSourceCreate, DataSourceRead, EntityUpdate, DataSourceUpdate, ConnectionTestRequest, OptionRead, EntityOption
 from services.photon.core.responses import StandardResponse
 from services.photon.core.dependencies import verify_api_version, PaginationParams
 from services.photon.core.utils import verify_connection
@@ -89,7 +89,7 @@ async def list_entities(
     )
 
 
-@router.get("/entities/options", response_model=StandardResponse[list[OptionRead]])
+@router.get("/entities/options", response_model=StandardResponse[list[EntityOption]])
 async def get_entity_options(
     db: AsyncSession = Depends(get_session),
     version: str = Depends(verify_api_version)
@@ -97,8 +97,8 @@ async def get_entity_options(
     """
     Fetch lightweight entity list for UI dropdowns
     """
-    result = await db.execute(select(Entity.id, Entity.name).order_by(Entity.name))
-    options = [{"id": row.id, "name": row.name} for row in result.all()]
+    result = await db.execute(select(Entity.id, Entity.name, Entity.join_key).order_by(Entity.name))
+    options = [{"id": row.id, "name": row.name, "join_key": row.join_key} for row in result.all()]
 
     return StandardResponse(data=options)
 

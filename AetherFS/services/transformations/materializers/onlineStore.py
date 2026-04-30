@@ -41,7 +41,7 @@ class OnlineStore:
             return value.isoformat()
 
         if isinstance(value, (dict, list)):
-            return json.dumps(value)
+            return json.dumps(value, default=str)
 
         return str(value)
 

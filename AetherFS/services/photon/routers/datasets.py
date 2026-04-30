@@ -205,7 +205,7 @@ async def get_dataset_access_info(
             response = await sts_client.assume_role(
                 RoleArn="arn:aws:iam::123456789012:role/aether-sts-role", 
                 RoleSessionName=f"session_{str(dataset_id)[:8]}",
-                Policy=json.dumps(iam_policy),
+                Policy=json.dumps(iam_policy, default=str),
                 DurationSeconds=expires_in
             )
         credentials = response['Credentials']

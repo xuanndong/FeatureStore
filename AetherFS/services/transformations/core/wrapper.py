@@ -37,9 +37,10 @@ class UDFEngine:
     """
     A dynamic engine that compiles and executes User-Defined Function (UDF) classes from source code strings
     """
-    def __init__(self, udf_code: str, class_name: str, dataset_name: str, connection_options: dict | None = None):
+    def __init__(self, udf_code: str, class_name: str, dataset_name: str, join_key: str = None, connection_options: dict | None = None):
         self.dataset_name = dataset_name
         self.connection_options = connection_options
+        self.join_key = join_key
         self.udf_instance = None
 
         detected_name = find_udf_class_name(udf_code)

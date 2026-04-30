@@ -74,7 +74,7 @@ def run_script_on_ray_worker(script_code: str, dataset_uri: str):
         "status": "FAILED" if error_msg else "SUCCESS",
         "logs": redirected_output.getvalue(),
         "error_message": error_msg,
-        "analytics_json": json.dumps(analytics.metrics)
+        "analytics_json": json.dumps(analytics.metrics, default=str)
     }
 
 
@@ -215,7 +215,8 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
             "features_config": feat_cfg,
             "windows": windows,
             "sync_online": run_req.sync_online,
-            "time_to_live": run_req.time_to_live if run_req.HasField('time_to_live') else None
+            "time_to_live": run_req.time_to_live if run_req.HasField('time_to_live') else None,
+            "join_key": run_req.join_key
         }
 
     def PreviewFeatureGroup(self, request, context):
@@ -245,7 +246,7 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
 
             response = pb2.PreviewResponse()
             for ds_name, records in raw_preview_results.items():
-                response.results_json[ds_name] = json.dumps(records)
+                response.results_json[ds_name] = json.dumps(records, default=str)
 
             return response
         except Exception as e:
@@ -285,11 +286,18 @@ class FeaturePipelineAPI(pb2_grpc.PipelineServiceServicer):
                 for fg in request.feature_groups
             ]
 
+            offline_store_creds = {
+                "endpoint_url": settings.MINIO_ENDPOINT, 
+                "access_key": settings.MINIO_ACCESS_KEY,
+                "secret_key": settings.MINIO_SECRET_KEY
+            }
+
             execute_view_materialization.remote(
                 kwargs={
                     "join_key": request.join_key,
                     "feature_groups": feature_groups,
-                    "output_uri": request.output_uri
+                    "output_uri": request.output_uri,
+                    "connection_options": offline_store_creds
                 },
                 job_id=request.job_id,
                 webhook_url=request.webhook_url if request.HasField("webhook_url") else ""

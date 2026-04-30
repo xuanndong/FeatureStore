@@ -25,10 +25,11 @@ from services.photon.core.grpcClient import grpc_client
 router = APIRouter(prefix="/views", tags=["Feature Views"])
 
 
-@router.get("/available-features", response_model=StandardResponse[list[FeatureDiscoveryRead]])
+@router.get("/available-features", response_model=StandardResponse[dict])
 async def list_available_features(
     search: str | None = None,
     entity_id: uuid.UUID | None = None,
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_session),
     version: str = Depends(verify_api_version)
 ):
@@ -36,10 +37,25 @@ async def list_available_features(
     Retrieve all available features to construct the View.
     Supports filtering by Entity to prevent UI overload.
     """
-    query = (
+    filters = []
+    if search:
+        filters.append(
+            Feature.name.ilike(f"%{search}%") | FeatureGroup.name.ilike(f"%{search}%")
+        )
+    if entity_id:
+        filters.append(Entity.id == entity_id)
+
+    count_query = (
+        select(func.count(Feature.id))
+        .join(FeatureGroup, Feature.group_id == FeatureGroup.id)
+        .join(Entity, FeatureGroup.entity_id == Entity.id)
+    )
+
+    data_query = (
         select(
             Feature,
             FeatureGroup.name.label("group_name"),
+            FeatureGroup.version.label("group_version"),
             Entity.id.label("entity_id"),
             Entity.name.label("entity_name")
         )
@@ -47,27 +63,38 @@ async def list_available_features(
         .join(Entity, FeatureGroup.entity_id == Entity.id)
     )
 
-    if search:
-        query = query.where(
-            Feature.name.ilike(f"%{search}%") | FeatureGroup.name.ilike(f"%{search}%")
-        )
+    if filters:
+        count_query = count_query.where(*filters)
+        data_query = data_query.where(*filters)
 
-    if entity_id:
-        query = query.where(Entity.id == entity_id)
+    total = (await db.execute(count_query)).scalar() or 0
 
-    result = await db.execute(query.order_by(Entity.name, FeatureGroup.name, Feature.name))
+    data_query = (
+        data_query
+        .order_by(Entity.name, FeatureGroup.name, FeatureGroup.version, Feature.name)
+        .offset(pagination.offset)
+        .limit(pagination.limit)
+    )
+
+    result = await db.execute(data_query)
     rows = result.all()
 
-    data = [
+    items = [
         FeatureDiscoveryRead(
             **row[0].model_dump(),
             group_name=row[1],
-            entity_id=row[2],
-            entity_name=row[3]
-        ) for row in rows
+            group_version=row[2],
+            entity_id=row[3],
+            entity_name=row[4]
+        ).model_dump() for row in rows
     ]
 
-    return StandardResponse(data=data)
+    return StandardResponse(
+        data={
+            "items": items,
+            "pagination": pagination.get_metadata(total)
+        }
+    )
 
 
 @router.post("/feature-views", response_model=StandardResponse[dict])
@@ -136,7 +163,7 @@ async def create_feature_view(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Entity not found"
             )
-        
+
         join_key = entity.join_key
 
         new_view = FeatureView(
@@ -163,13 +190,23 @@ async def create_feature_view(
         db.add(new_job)
         await db.flush()
 
+        # Map metadata with version-specific aliases
         fg_metadata_map = {}
         for feature, feature_group in rows:
             fg_id = feature_group.id
             if fg_id not in fg_metadata_map:
                 raw_name = feature_group.name
+                version = feature_group.version
+                
+                # Sanitize name
                 clean_name = re.sub(r'\W+', '_', raw_name).strip('_').lower()
-                safe_alias = f"{clean_name}_t{len(fg_metadata_map)}"
+                
+                # Version the alias (e.g., user_daily_activity_v1)
+                safe_alias = f"{clean_name}_v{version}"
+
+                # Fallback: Prevent duplicate feature names within the same version
+                if any(m["alias"] == safe_alias for m in fg_metadata_map.values()):
+                    safe_alias = f"{safe_alias}_{len(fg_metadata_map)}"
 
                 fg_metadata_map[fg_id] = {
                     "alias": safe_alias,
@@ -187,8 +224,9 @@ async def create_feature_view(
             for meta in fg_metadata_map.values()
         ]
 
-        webhook_url = f"{settings.WEBHOOK_URL}/materialized"
-            
+        webhook_url = settings.WEBHOOK_URL.replace('studio', 'views')
+        webhook_url = f"{webhook_url}/materialized"
+
         view_req = pb2.MaterializeViewRequest(
             job_id=str(new_job_id),
             view_id=str(new_view.id),
@@ -199,7 +237,7 @@ async def create_feature_view(
         )
 
         run_res = await grpc_client.materialize_feature_view(view_req)
-            
+
         new_job.status = run_res.status
         new_job.updated_at = datetime.now(timezone.utc).timestamp()
 
@@ -307,8 +345,9 @@ async def get_feature_view_detail(
         select(
             Feature,
             FeatureGroup.name.label("group_name"),
+            FeatureGroup.version.label("group_version"),
             Entity.id.label("entity_id"),
-            Entity.name.label("entity_name")
+            Entity.name.label("entity_name"),
         )
         .join(FeatureViewMember, Feature.id == FeatureViewMember.feature_id)
         .join(FeatureGroup, Feature.group_id == FeatureGroup.id)
@@ -323,8 +362,9 @@ async def get_feature_view_detail(
         FeatureDiscoveryRead(
             **row[0].model_dump(), 
             group_name=row[1],
-            entity_id=row[2],
-            entity_name=row[3]
+            group_version=row[2],
+            entity_id=row[3],
+            entity_name=row[4]
         )
         for row in feature_rows
     ]

@@ -1,10 +1,12 @@
 # Standard Libraries
 import logging
 import os
+import re
 
 # Third party Libraries
 import ray
 from ray.exceptions import RayTaskError
+from ray.data.datasource.partitioning import Partitioning
 import pyarrow as pa
 from pyarrow import dataset as ds
 from pyarrow import csv as pacsv
@@ -113,7 +115,7 @@ class RayBased:
 
         return preview_results
 
-    def execute_udf_structure(self, dataset: ds.Dataset | dict[str, ds.Dataset], location_uri: str, udf_code: str, output_uri: str, source_format: SourceFormat, time_to_live: int, target_datasets: list[str] | None = None, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
+    def execute_udf_structure(self, dataset: ds.Dataset | dict[str, ds.Dataset], location_uri: str, udf_code: str, output_uri: str, source_format: SourceFormat, time_to_live: int, join_key: str, target_datasets: list[str] | None = None, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
         """
         Executes the UDF across the entire dataset and writes the output to storage
         """
@@ -156,7 +158,7 @@ class RayBased:
 
                 transformed = ray_dataset.map_batches(
                     UDFEngine,
-                    fn_constructor_kwargs={"udf_code": udf_code, "class_name": detected_class, "dataset_name": ds_name},
+                    fn_constructor_kwargs={"udf_code": udf_code, "class_name": detected_class, "dataset_name": ds_name, "join_key": join_key},
                     compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2),
                     batch_format="pyarrow",
                     **remote_args
@@ -235,7 +237,7 @@ class RayBased:
             logger.error("Worker crashed during unstructured preview.")
             raise RuntimeError(f"Preview error: {str(e.cause)}")
 
-    def execute_udf_unstructure(self, dataset: list[str], location_uri: str, udf_code: str, output_uri: str, source_format: str, time_to_live: int, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
+    def execute_udf_unstructure(self, dataset: list[str], location_uri: str, udf_code: str, output_uri: str, source_format: str, time_to_live: int, join_key: str, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
         """
         Executes UDF across unstructured files and writes the output (usually as Parquet metadata/embeddings) to internal storage.
         """
@@ -254,24 +256,36 @@ class RayBased:
         fn_kwargs = {
             "udf_code": udf_code,
             "class_name": detected_class,
-            "dataset_name": ds_name
+            "dataset_name": ds_name,
+            "join_key": join_key
         }
+
+        # Join Key
+        partition_strategy = Partitioning(style="hive", field_names=[join_key])
 
         match source_format:
             case SourceFormat.IMAGE:
-                ray_dataset = ray.data.read_images(clean_paths, filesystem=fs)
+                ray_dataset = ray.data.read_images(clean_paths, filesystem=fs, partitioning=partition_strategy)
 
             case SourceFormat.TEXT:
-                ray_dataset = ray.data.read_text(clean_paths, filesystem=fs)
+                ray_dataset = ray.data.read_text(clean_paths, filesystem=fs, partitioning=partition_strategy)
 
             case SourceFormat.AUDIO | SourceFormat.VIDEO:
-                items = [{"path": p} for p in dataset]
-                ray_dataset = ray.data.from_items(items)
+                items = []
+                for p in dataset:
+                    item = {"path": p}
 
+                    match_hive = re.search(rf"{join_key}=([^/]+)", p)
+                    if match_hive:
+                        item[join_key] = match_hive.group(1)
+
+                    items.append(item)
+
+                ray_dataset = ray.data.from_items(items)
                 fn_kwargs["connection_options"] = connection_options
 
             case SourceFormat.BINARY:
-                ray_dataset = ray.data.read_binary_files(clean_paths, filesystem=fs)
+                ray_dataset = ray.data.read_binary_files(clean_paths, filesystem=fs, partitioning=partition_strategy)
 
             case _:
                 raise ValueError(f"Unsupported format: '{source_format}'")
@@ -309,6 +323,7 @@ class RayBased:
         udf_code: str, 
         output_uri: str, 
         source_format: str,
+        join_key: str,
         time_to_live: int | None,
         requirements: list[str] | None = None, 
         connection_options: dict | None = None, 
@@ -329,6 +344,7 @@ class RayBased:
                 output_uri=output_uri,
                 source_format=source_format,
                 time_to_live=time_to_live,
+                join_key=join_key,
                 requirements=requirements,
                 connection_options=connection_options,
                 entity_keys=entity_keys,
@@ -342,6 +358,7 @@ class RayBased:
                 output_uri=output_uri,
                 source_format=source_format,
                 time_to_live=time_to_live,
+                join_key=join_key,
                 target_datasets=target_datasets,
                 requirements=requirements,
                 connection_options=connection_options,

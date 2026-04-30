@@ -56,7 +56,7 @@ class AnalyticsLogger:
     def log_scalar(self, name, value, unit=""):
         self.metrics["scalars"].append({"name": name, "value": value, "unit": unit})
 
-    def log_figure(self, title="Biểu đồ"):
+    def log_figure(self, title="Chart"):
         try:
             import matplotlib.pyplot as plt
             buf = io.BytesIO()
@@ -70,9 +70,9 @@ class AnalyticsLogger:
             })
             plt.clf()
         except ImportError:
-            print("Cảnh báo: matplotlib chưa được cài đặt để vẽ biểu đồ.")
+            print("Warning: matplotlib is not installed. Skipping plot generation")
         except Exception as e:
-            print(f"Lỗi khi xuất biểu đồ: {str(e)}")
+            print(f"Error exporting chart: {str(e)}")
 
 
 analytics = AnalyticsLogger()

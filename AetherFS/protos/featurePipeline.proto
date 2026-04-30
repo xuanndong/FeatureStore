@@ -90,6 +90,8 @@ message RunRequest {
 
     string feature_group_id = 14; 
     optional string webhook_url = 15;
+
+    string join_key = 16;
 }
 
 message RunResponse {

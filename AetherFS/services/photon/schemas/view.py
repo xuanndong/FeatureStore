@@ -10,6 +10,7 @@ class FeatureDiscoveryRead(BaseModel):
     data_type: str
     group_id: UUID
     group_name: str
+    group_version: int
     description: str | None
     
     entity_id: UUID
@@ -62,8 +63,8 @@ class MaterializationRead(BaseModel):
     status: str
     start_time: float | None = None
     end_time: float | None = None
-    offline_uri: float | None = None
-    error_message: float | None = None
+    offline_uri: str | None = None 
+    error_message: str | None = None
     created_at: float
     updated_at: float
 

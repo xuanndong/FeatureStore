@@ -66,3 +66,7 @@ class ConnectionTestRequest(BaseModel):
 class OptionRead(BaseModel):
     id: UUID
     name: str
+
+
+class EntityOption(OptionRead):
+    join_key: str
