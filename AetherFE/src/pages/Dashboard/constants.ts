@@ -1,4 +1,4 @@
-import { Layers, Search, Eye, Database, Fingerprint, RefreshCcw } from 'lucide-react';
+import { Layers, Eye, Database, Fingerprint, RefreshCcw } from 'lucide-react';
 import type { QuickLinkItem } from '@/pages/Dashboard/QuickLinkCard';
 
 export const QUICK_LINKS_DATA: QuickLinkItem[] = [
@@ -19,12 +19,6 @@ export const QUICK_LINKS_DATA: QuickLinkItem[] = [
     desc: 'Định nghĩa các thực thể logic và khóa liên kết (Join Key) cho mô hình AI.',
     icon: Fingerprint,
     path: '/entities',
-  },
-  {
-    title: 'Online Explorer',
-    desc: 'Truy vấn và kiểm tra dữ liệu đặc trưng trong thời gian thực từ Redis.',
-    icon: Search,
-    path: '/online-explorer',
   },
   {
     title: 'Materialization',

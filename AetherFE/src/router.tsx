@@ -12,7 +12,7 @@ const EntityRegistryPage = lazy(() => import('@/pages/EntityRegistry/EntityRegis
 const DataSourcesPage = lazy(() => import('@/pages/DataSources/DataSourcesPage').then(m => ({ default: m.DataSourcesPage })));
 const TransformationsPage = lazy(() => import('@/pages/Transformations/TransformationsPage').then(m => ({ default: m.TransformationsPage })));
 const FeatureViewsPage = lazy(() => import('@/pages/FeatureViews/FeatureViewsPage').then(m => ({ default: m.FeatureViewsPage })));
-const OnlineExplorerPage = lazy(() => import('@/pages/OnlineExplorer/OnlineExplorerPage').then(m => ({ default: m.OnlineExplorerPage })));
+// const OnlineExplorerPage = lazy(() => import('@/pages/OnlineExplorer/OnlineExplorerPage').then(m => ({ default: m.OnlineExplorerPage })));
 const DatasetWorkspacePage = lazy(() => import('@/pages/Materialization/DatasetWorkspacePage').then(m => ({ default: m.DatasetWorkspacePage })));
 
 const PageSpinner: React.FC = () => (
@@ -91,14 +91,14 @@ export const AppRouter: React.FC = () => {
             </Suspense>
           }
         />
-        <Route
+        {/* <Route
           path="online-explorer"
           element={
             <Suspense fallback={<PageSpinner />}>
               <OnlineExplorerPage />
             </Suspense>
           }
-        />
+        /> */}
         <Route
           path="materialization"
           element={
