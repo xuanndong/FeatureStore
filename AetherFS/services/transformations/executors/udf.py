@@ -205,10 +205,10 @@ class RayBased:
 
         match source_format:
             case SourceFormat.IMAGE:
-                ray_dataset = ray.data.read_images(sample_paths, filesystem=fs)
+                ray_dataset = ray.data.read_images(sample_paths, filesystem=fs, include_paths=True)
 
             case SourceFormat.TEXT:
-                ray_dataset = ray.data.read_text(sample_paths, filesystem=fs)
+                ray_dataset = ray.data.read_text(sample_paths, filesystem=fs, include_paths=True)
 
             case SourceFormat.AUDIO | SourceFormat.VIDEO:
                 items = [{"path": p} for p in full_sample_uris]
@@ -265,10 +265,10 @@ class RayBased:
 
         match source_format:
             case SourceFormat.IMAGE:
-                ray_dataset = ray.data.read_images(clean_paths, filesystem=fs, partitioning=partition_strategy)
+                ray_dataset = ray.data.read_images(clean_paths, filesystem=fs, partitioning=partition_strategy, include_paths=True)
 
             case SourceFormat.TEXT:
-                ray_dataset = ray.data.read_text(clean_paths, filesystem=fs, partitioning=partition_strategy)
+                ray_dataset = ray.data.read_text(clean_paths, filesystem=fs, partitioning=partition_strategy, include_paths=True)
 
             case SourceFormat.AUDIO | SourceFormat.VIDEO:
                 items = []

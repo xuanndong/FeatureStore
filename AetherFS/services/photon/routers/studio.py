@@ -82,8 +82,8 @@ async def preview_transformation(
         limit=payload.limit,
     )
 
-    if payload.requirements:
-        clean_preview_reqs = [r.strip() for r in payload.requirements if r.strip()]
+    clean_preview_reqs = [r.strip() for r in (payload.requirements or []) if r.strip()]
+    if clean_preview_reqs:
         grpc_req.requirements.extend(clean_preview_reqs)
 
     try:

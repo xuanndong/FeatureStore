@@ -54,7 +54,7 @@ SELECT
 FROM source_data;`;
   // --- Step 3: Transformation ---
   const [transformStep, setTransformStep] = useState<WizardTransformStep>({
-    transformation_name: '', 
+    transformation_name: '',
     transform_type: 'SQL',
     transform_definition: SQL,
     previewOk: false
@@ -74,12 +74,12 @@ FROM source_data;`;
   }, []);
 
   const isStep1Valid = Boolean(
-    entityStep.entity_id || 
+    entityStep.entity_id ||
     (entityStep.new_entity_config?.name?.trim() && entityStep.new_entity_config?.join_key?.trim())
   );
 
   const isStep2Valid = Boolean(
-    sourceStep.source_id || 
+    sourceStep.source_id ||
     (sourceStep.new_source_config?.name?.trim() && sourceStep.connectionChecked)
   );
 
@@ -95,9 +95,9 @@ FROM source_data;`;
       setIsCheckingSource(true);
       setSourceStep(prev => ({ ...prev, connectionChecked: false, connectionError: null }));
 
-      await registryApi.testConnection({ 
+      await registryApi.testConnection({
         location_uri: new_source_config.location_uri,
-        connection_options: new_source_config.connection_options 
+        connection_options: new_source_config.connection_options
       });
 
       setSourceStep(prev => ({ ...prev, connectionChecked: true }));
@@ -109,7 +109,7 @@ FROM source_data;`;
     }
   }, [sourceStep.new_source_config]);
 
-  const handleRunScript = useCallback(async () => {
+  const handleRunScript = useCallback(async (requirements: string[]) => {
     try {
       setIsPreviewing(true);
       const res = await studioApi.previewTransformation({
@@ -117,10 +117,11 @@ FROM source_data;`;
         new_source_config: sourceStep.source_id ? undefined : sourceStep.new_source_config,
         transform_type: transformStep.transform_type,
         transform_definition: transformStep.transform_definition,
-        limit: 10
+        limit: 10,
+        ...(requirements.length > 0 && { requirements }),
       });
       setPreviewResult(res.data);
-      setTransformStep(prev => ({ ...prev, previewOk: true, inferredFeatures: res.data.inferred_features }));
+      setTransformStep(prev => ({ ...prev, previewOk: true, inferredFeatures: res.data.inferred_features, requirements }));
       showNotification('success', 'Chạy script thành công!');
     } catch (err: unknown) {
       showNotification('error', err instanceof Error ? err.message : 'Lỗi khi chạy script');
@@ -141,6 +142,7 @@ FROM source_data;`;
         source_id: sourceStep.source_id, new_source_config: sourceStep.source_id ? undefined : sourceStep.new_source_config,
         transformation_name: transformStep.transformation_name, transform_type: transformStep.transform_type,
         transform_definition: transformStep.transform_definition, features: transformStep.inferredFeatures || [],
+        ...(transformStep.requirements && transformStep.requirements.length > 0 && { requirements: transformStep.requirements }),
         is_scheduled: isScheduled, cron_expression: isScheduled ? cronExp : undefined
       });
 
@@ -157,12 +159,12 @@ FROM source_data;`;
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
+
       {/* Come back */}
       <div>
-        <button 
-          className="btn btn-ghost" 
-          onClick={() => setShowCancelModal(true)} 
+        <button
+          className="btn btn-ghost"
+          onClick={() => setShowCancelModal(true)}
           style={{ padding: 0, gap: '6px', color: 'var(--text-secondary)', marginBottom: '16px' }}
         >
           <ArrowLeft size={16} /> Quay lại
@@ -213,11 +215,11 @@ FROM source_data;`;
 
           {step === 3 && (
             <Step3Transform
-              transformStep={transformStep} 
-              sourceFormat={sourceStep.new_source_config?.source_format || 'PARQUET'} 
-              isPreviewing={isPreviewing} 
-              onStepChange={setTransformStep} 
-              onRunScript={handleRunScript} 
+              transformStep={transformStep}
+              sourceFormat={sourceStep.new_source_config?.source_format || 'PARQUET'}
+              isPreviewing={isPreviewing}
+              onStepChange={setTransformStep}
+              onRunScript={handleRunScript}
             />
           )}
         </div>
@@ -226,15 +228,15 @@ FROM source_data;`;
           <button className="btn btn-ghost" onClick={() => step > 1 ? setStep((step - 1) as 1 | 2 | 3) : setShowCancelModal(true)}>
             Quay lại
           </button>
-          
+
           {step < 3 ? (
-            <button 
-              className="btn btn-secondary" 
-              onClick={() => setStep((step + 1) as 1 | 2 | 3)} 
-              disabled={step === 1 ? !isStep1Valid : !isStep2Valid} 
-              style={{ 
-                background: (step === 1 ? isStep1Valid : isStep2Valid) ? '#000000' : '#7c3aed', 
-                color: 'white', 
+            <button
+              className="btn btn-secondary"
+              onClick={() => setStep((step + 1) as 1 | 2 | 3)}
+              disabled={step === 1 ? !isStep1Valid : !isStep2Valid}
+              style={{
+                background: (step === 1 ? isStep1Valid : isStep2Valid) ? '#000000' : '#7c3aed',
+                color: 'white',
                 border: 'none',
                 cursor: (step === 1 ? isStep1Valid : isStep2Valid) ? 'pointer' : 'not-allowed',
                 transition: 'background-color 0.2s ease-in-out'
@@ -243,13 +245,13 @@ FROM source_data;`;
               Tiếp theo →
             </button>
           ) : (
-            <button 
-              className="btn btn-secondary" 
-              onClick={() => setShowFinishModal(true)} 
-              disabled={!isStep3Valid} 
-              style={{ 
-                background: isStep3Valid ? '#000000' : '#d1d5db', 
-                color: 'white', 
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowFinishModal(true)}
+              disabled={!isStep3Valid}
+              style={{
+                background: isStep3Valid ? '#000000' : '#d1d5db',
+                color: 'white',
                 border: 'none',
                 cursor: isStep3Valid ? 'pointer' : 'not-allowed',
                 transition: 'background-color 0.2s ease-in-out'
@@ -268,24 +270,24 @@ FROM source_data;`;
       />
 
       <FinishModal
-        isOpen={showFinishModal} 
-        fgName={fgName} 
-        useOnlineStore={useOnlineStore} 
-        isScheduled={isScheduled} 
-        cronExp={cronExp} 
+        isOpen={showFinishModal}
+        fgName={fgName}
+        useOnlineStore={useOnlineStore}
+        isScheduled={isScheduled}
+        cronExp={cronExp}
         isSubmitting={isSubmitting}
-        onClose={() => setShowFinishModal(false)} 
-        onFinish={handleFinish} 
-        onFgNameChange={setFgName} 
-        onUseOnlineStoreChange={setUseOnlineStore} 
-        onScheduledChange={setIsScheduled} 
+        onClose={() => setShowFinishModal(false)}
+        onFinish={handleFinish}
+        onFgNameChange={setFgName}
+        onUseOnlineStoreChange={setUseOnlineStore}
+        onScheduledChange={setIsScheduled}
         onCronExpChange={setCronExp}
       />
 
       {previewResult && (
-        <PreviewModal 
-          previewResult={previewResult} 
-          onClose={() => setPreviewResult(null)} 
+        <PreviewModal
+          previewResult={previewResult}
+          onClose={() => setPreviewResult(null)}
         />
       )}
     </div>

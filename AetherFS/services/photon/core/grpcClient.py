@@ -27,7 +27,7 @@ class FeatureStoreGRPCClient:
 
     async def get_preview(self, request: pb2.PreviewRequest) -> pb2.PreviewResponse:
         stub = pb2_grpc.PipelineServiceStub(self.channel)
-        response = await stub.PreviewFeatureGroup(request, timeout=30.0)
+        response = await stub.PreviewFeatureGroup(request, timeout=180.0)
 
         return response
 

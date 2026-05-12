@@ -244,7 +244,7 @@ interface Step3TransformProps {
   sourceFormat?: SourceFormat; 
   isPreviewing: boolean;
   onStepChange: (step: any) => void;
-  onRunScript: () => void;
+  onRunScript: (requirements: string[]) => void;
 }
 
 export const Step3Transform: React.FC<Step3TransformProps> = React.memo(({
@@ -341,7 +341,16 @@ export const Step3Transform: React.FC<Step3TransformProps> = React.memo(({
           <button
             className="btn btn-secondary"
             style={{ width: '100%', justifyContent: 'center', background: '#7c3aed', color: 'white', border: 'none', padding: '10px', fontWeight: 600 }}
-            onClick={onRunScript}
+            onClick={() => {
+              // Flush bất kỳ text nào đang gõ dở trong input vào requirements
+              const tagged = transformStep.requirements || [];
+              const pending = reqInput.trim().toLowerCase();
+              const merged = pending && !tagged.includes(pending) && !STANDARD_LIBS.includes(pending.split('==')[0])
+                ? [...tagged, pending]
+                : tagged;
+              if (pending) setReqInput('');
+              onRunScript(merged);
+            }}
             disabled={isPreviewing}
           >
             {isPreviewing ? <div className="spinner spinner-sm" /> : '▶ Chạy thử nghiệm (Preview)'}

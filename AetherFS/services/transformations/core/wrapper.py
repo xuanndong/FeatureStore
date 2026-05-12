@@ -1,10 +1,12 @@
 # Standard Libraries
 import logging
 import ast
+import inspect
 
 # Third party Libraries
 import pyarrow as pa
 import pandas as pd
+import numpy as np
 
 # Local Libraries
 from common.constants import UDFConstants
@@ -66,27 +68,35 @@ class UDFEngine:
 
     def _init_instance(self, batch):
         """
-        Init instance of UDF class
+        Smart Init instance of UDF class using inspect
         """
-        init_kwargs = {"dataset_name": self.dataset_name}
+        available_kwargs = {"dataset_name": self.dataset_name}
 
         first_path = None
-        if isinstance(batch, dict) and batch.get("path") and len(batch["path"]) > 0:
-            first_path = str(batch["path"][0])
+        first_path = None
+        if isinstance(batch, dict) and "path" in batch:
+            paths = batch["path"]
+            if len(paths) > 0:
+                first_path = str(paths[0])
 
         if first_path:
             client = FsspecClient(first_path, self.connection_options)
-            init_kwargs["fs"] = client.get_raw_fs()
+            available_kwargs["fs"] = client.get_raw_fs()
 
         try:
-            self.udf_instance = self.udf_class(**init_kwargs)
-        except TypeError as e:
-            if "fs" not in str(e): 
-                raise ValueError(f"Initialization error: {e}")
+            sig = inspect.signature(self.udf_class)
+            params = sig.parameters
+            accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
 
-            init_kwargs.pop("fs", None)
-            self.udf_instance = self.udf_class(**init_kwargs)
-            logger.info("UDF '%s' initialized without 'fs' context.", self.target_class_name)
+            if accepts_kwargs:
+                final_kwargs = available_kwargs
+            else:
+                final_kwargs = {k: v for k, v in available_kwargs.items() if k in params}
+
+            self.udf_instance = self.udf_class(**final_kwargs)
+
+        except Exception as e:
+            raise ValueError(f"Initialization error for class '{self.target_class_name}': {e}")
 
     def __call__(self, batch):
         if self.udf_instance is None:
@@ -98,7 +108,13 @@ class UDFEngine:
         if isinstance(batch, pa.Table):
             safe_batch = batch.to_pandas()
         elif isinstance(batch, dict):
-            safe_batch = pd.DataFrame(batch)
+            processed_dict = {}
+            for key, value in batch.items():
+                if isinstance(value, np.ndarray) and value.ndim > 1:
+                    processed_dict[key] = [item for item in value]
+                else:
+                    processed_dict[key] = value
+            safe_batch = pd.DataFrame(processed_dict)
         elif isinstance(batch, pd.DataFrame):
             safe_batch = batch
         else:
@@ -112,7 +128,12 @@ class UDFEngine:
             if method_to_call is None or not callable(method_to_call):
                 raise AttributeError(f"Class '{self.target_class_name}' is missing or has a corrupted '{method_name}()' method")
 
-            return self.udf_instance(safe_batch)
+            result = self.udf_instance(safe_batch)
+
+            if isinstance(result, list):
+                return pd.DataFrame(result)
+
+            return result
         except Exception as e:
             logger.error(f"UDF logic error '{self.target_class_name}': {str(e)}")
             raise RuntimeError(f"Error when executing code: {str(e)}") from e
