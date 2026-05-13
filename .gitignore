@@ -19,4 +19,5 @@ AetherFS/alembic/versions/
 # Protocol
 grpc
 
-AetherFS/services/featureTransformations/*.md
+AetherFS/services/transformations/*.md
+AetherFS/services/photon/*.md
