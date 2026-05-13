@@ -1,0 +1,35 @@
+FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Thiết lập biễn môi trường để chạy mã nguồn
+ENV PYTHONPATH="/app:/app/common/grpc:${PYTHONPATH}"
+
+WORKDIR /app
+
+# Tải một vài phụ thuộc
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy mã nguồn
+COPY ./common ./common
+COPY ./protos ./protos
+COPY ./services/photon ./services/photon
+
+# Biên dịch Proto vào đúng thư mục trong PYTHONPATH
+RUN python -m grpc_tools.protoc \
+    -I./protos \
+    --python_out=./common/grpc \
+    --grpc_python_out=./common/grpc \
+    ./protos/featurePipeline.proto
+
+EXPOSE 8080
+
+# Chạy mã nguồn
+CMD ["python", "-m", "services.photon.main"]

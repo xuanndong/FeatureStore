@@ -1,2 +1,2 @@
 # Aether
-> A Distributed Feature Store for Machine Learning Applications
+> A Distributed Feature Platform for Machine Learning Applications

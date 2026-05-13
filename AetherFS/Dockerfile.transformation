@@ -1,0 +1,25 @@
+FROM aether-base:latest
+
+WORKDIR /app
+
+# 1. Cài đặt các requirements riêng biệt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 2. Copy mã nguồn cần thiết cho tính toán phân tán
+COPY ./common ./common
+COPY ./protos ./protos
+COPY ./services/transformations ./services/transformations
+
+# 3. Biên dịch tệp .proto sang Python ngay khi build
+RUN python -m grpc_tools.protoc \
+    -I./protos \
+    --python_out=./common/grpc \
+    --grpc_python_out=./common/grpc \
+    ./protos/featurePipeline.proto
+
+# Cổng gRPC mặc định cho service này
+EXPOSE 50051
+
+# Chạy main script của transformation service
+CMD ["python", "services/transformations/main.py"]

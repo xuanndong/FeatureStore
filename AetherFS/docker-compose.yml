@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # --- Management Cluster (Master Node) ---
+  photon:
+    build:
+      context: .
+      dockerfile: Dockerfile.photon
+    container_name: aether-photon
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    networks:
+      - aether-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+
+  # --- Computing Cluster (Worker Nodes) ---
+  transformation:
+    build:
+      context: .
+      dockerfile: Dockerfile.transformation
+    container_name: aether-transformation
+    env_file:
+      - .env
+    networks:
+      - aether-network
+    deploy:
+      replicas: 1
+
+  # --- Infrastructure Layer ---
+  db:
+    image: postgres:15-alpine
+    container_name: aether-db
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+    networks:
+      - aether-network
+
+  redis:
+    image: redis/redis-stack:latest
+    container_name: aether-redis
+    ports:
+      - "6379:6379"
+      - "8001:8001" # RedisInsight UI
+    networks:
+      - aether-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: aether-minio
+    env_file:
+      - .env
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Console UI
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - aether-network
+
+networks:
+  aether-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:

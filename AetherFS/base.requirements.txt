@@ -1,0 +1,58 @@
+# ==========================================================
+# AETHER - BASE MACHINE LEARNING REQUIREMENTS
+# Phục vụ: Vision, NLP, Video, Audio, Text & Deep Learning
+# ==========================================================
+
+# --- Core Data Science & Math ---
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+scikit-learn>=1.2.0
+matplotlib
+seaborn
+tqdm
+
+# --- Deep Learning (PyTorch Ecosystem) ---
+# Mặc định cài bản CPU để tối ưu dung lượng Image Base
+# Nếu dùng GPU, cần cài qua Dockerfile với index-url riêng
+torch>=2.0.0
+torchvision
+torchaudio
+
+# --- Computer Vision & Video Processing ---
+# Dùng bản headless để không cần cài thư viện GUI trong Docker
+opencv-python-headless
+Pillow
+albumentations
+moviepy
+decord
+
+# --- NLP & Text Processing ---
+# Đáp ứng các bài toán như IMDB Reviews trong thực nghiệm
+transformers
+datasets
+nltk
+spacy
+beautifulsoup4
+
+# --- Audio Processing ---
+librosa
+soundfile
+
+# --- Distributed Computing & Query Engine ---
+# Framework lõi của hệ thống AetherFS
+ray[default]>=2.7.0
+duckdb>=0.9.0
+
+# --- Storage & Data Formats ---
+# Hỗ trợ Offline Store (MinIO/S3) và định dạng Parquet
+fsspec
+s3fs
+pyarrow
+fastparquet
+
+# --- Communication & Protocols ---
+# Phục vụ giao tiếp giữa các node trong cụm máy chủ
+grpcio
+grpcio-tools
+httpx
