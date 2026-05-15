@@ -115,7 +115,7 @@ class RayBased:
 
         return preview_results
 
-    def execute_udf_structure(self, dataset: ds.Dataset | dict[str, ds.Dataset], location_uri: str, udf_code: str, output_uri: str, source_format: SourceFormat, time_to_live: int, join_key: str, target_datasets: list[str] | None = None, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
+    def execute_udf_structure(self, dataset: ds.Dataset | dict[str, ds.Dataset], location_uri: str, udf_code: str, output_uri: str, source_format: SourceFormat, time_to_live: int, join_key: str, target_datasets: list[str] | None = None, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False, mode: str = "overwrite") -> dict[str, str]:
         """
         Executes the UDF across the entire dataset and writes the output to storage
         """
@@ -172,7 +172,7 @@ class RayBased:
                         compute=ray.data.ActorPoolStrategy(min_size=1, max_size=2),
                     )
 
-                final_uri = offline_store.save_ray_dataset(dataset=transformed, output_uri=output_uri, dataset_name=ds_name)
+                final_uri = offline_store.save_ray_dataset(dataset=transformed, output_uri=output_uri, dataset_name=ds_name, mode=mode)
                 saved_paths[ds_name] = final_uri
             except RayTaskError as e:
                 logger.error("Worker crashed during execution on %s", ds_name)
@@ -237,7 +237,7 @@ class RayBased:
             logger.error("Worker crashed during unstructured preview.")
             raise RuntimeError(f"Preview error: {str(e.cause)}")
 
-    def execute_udf_unstructure(self, dataset: list[str], location_uri: str, udf_code: str, output_uri: str, source_format: str, time_to_live: int, join_key: str, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False) -> dict[str, str]:
+    def execute_udf_unstructure(self, dataset: list[str], location_uri: str, udf_code: str, output_uri: str, source_format: str, time_to_live: int, join_key: str, requirements: list[str] | None = None, connection_options: dict | None = None, entity_keys: list[str] | None = None, sync_online: bool = False, mode: str = "overwrite") -> dict[str, str]:
         """
         Executes UDF across unstructured files and writes the output (usually as Parquet metadata/embeddings) to internal storage.
         """
@@ -309,7 +309,7 @@ class RayBased:
                 )
 
             offline_store = OfflineStore()
-            final_uri = offline_store.save_ray_dataset(dataset=transformed, output_uri=output_uri, dataset_name=ds_name)
+            final_uri = offline_store.save_ray_dataset(dataset=transformed, output_uri=output_uri, dataset_name=ds_name, mode=mode)
 
             return {ds_name: final_uri}
         except RayTaskError as e:
@@ -329,7 +329,8 @@ class RayBased:
         connection_options: dict | None = None, 
         target_datasets: list[str] | None = None,
         entity_keys: list[str] | None = None,
-        sync_online: bool = False
+        sync_online: bool = False,
+        mode: str = "overwrite"
     ) -> dict[str, str]:
         """
         Automatically route data to structured or unstructured pipelines
@@ -348,7 +349,8 @@ class RayBased:
                 requirements=requirements,
                 connection_options=connection_options,
                 entity_keys=entity_keys,
-                sync_online=sync_online
+                sync_online=sync_online,
+                mode=mode
             )
         elif isinstance(dataset, (ds.Dataset, dict)):
             return self.execute_udf_structure(
@@ -363,7 +365,8 @@ class RayBased:
                 requirements=requirements,
                 connection_options=connection_options,
                 entity_keys=entity_keys,
-                sync_online=sync_online
+                sync_online=sync_online,
+                mode=mode
             )
         else:
             raise TypeError(f"Unsupported dataset format: {type(dataset)}")

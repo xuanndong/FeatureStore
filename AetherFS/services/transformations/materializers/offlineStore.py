@@ -107,49 +107,16 @@ class OfflineStore:
         Write summary JSON file to storage
         """
         if isinstance(fs, pafs.LocalFileSystem):
-            os.makedirs(os.path.dirname(summary_path), exist_ok=True)
+            parent_dir = os.path.dirname(summary_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
 
         with fs.open_output_stream(summary_path) as file:
             file.write(json.dumps(summary_data, default=str).encode('utf-8'))
 
-    def save_pyarrow_table(self, table: pa.Table, output_uri: str, dataset_name: str) -> str:
+    def save_pyarrow_table(self, table: pa.Table, output_uri: str, dataset_name: str, mode: str = "overwrite") -> str:
         """
-        Write single tabular data and generate summary metadata
-        """
-        fs, base_path = self._get_fs_and_base_path(output_uri)
-
-        is_default = dataset_name in [VirtualDataset.DEFAULT_STRUCTURED.value, VirtualDataset.DEFAULT_UNSTRUCTURED.value]
-
-        file_name = "data.parquet" if is_default else f"{dataset_name}.parquet"
-        summary_name = "summary.json" if is_default else f"{dataset_name}_summary.json"
-
-        target_path = posixpath.join(base_path, file_name)
-        final_uri = posixpath.join(output_uri, file_name)
-
-        summary_path = posixpath.join(base_path, summary_name)
-        summary_uri = posixpath.join(output_uri, summary_name)
-
-        if isinstance(fs, pafs.LocalFileSystem):
-            os.makedirs(os.path.dirname(target_path), exist_ok=True)
-
-        # Sink Parquet
-        pq.write_table(table, target_path, filesystem=fs)
-
-        # Sink Summary
-        summary_data = self._extract_pa_metadata(table)
-        self._write_summary(fs, summary_path, summary_data)
-
-        logger.info(f"Successfully saved data and summary to {output_uri}")
-        return {
-            "dataset_name": dataset_name,
-            "final_uri": final_uri,
-            "summary_uri": summary_uri,
-            "row_count": summary_data["row_count"]
-        }
-
-    def save_ray_dataset(self, dataset: ray.data.Dataset, output_uri: str, dataset_name: str) -> str:
-        """
-        Partitioned data write to multiple files and generate summary metadata
+        Write tabular data and generate/update summary metadata
         """
         fs, base_path = self._get_fs_and_base_path(output_uri)
 
@@ -162,6 +129,67 @@ class OfflineStore:
 
         summary_path = posixpath.join(base_path, summary_name)
         summary_uri = posixpath.join(output_uri, summary_name)
+
+        # Handle Overwrite mode: delete directory contents if not default root
+        if mode == "overwrite" and not is_default:
+            try:
+                fs.delete_dir(target_dir)
+            except Exception:
+                pass
+
+        if isinstance(fs, pafs.LocalFileSystem):
+            os.makedirs(target_dir, exist_ok=True)
+
+        # Sink Parquet with unique file name
+        import uuid
+        file_name = f"part-{uuid.uuid4().hex}.parquet"
+        target_path = posixpath.join(target_dir, file_name)
+        pq.write_table(table, target_path, filesystem=fs)
+
+        # Sink Summary
+        summary_data = self._extract_pa_metadata(table)
+        
+        # Merge row_count if append mode
+        if mode == "append":
+            try:
+                with fs.open_input_stream(summary_path) as file:
+                    old_summary = json.loads(file.read().decode('utf-8'))
+                    summary_data["row_count"] += old_summary.get("row_count", 0)
+            except Exception:
+                pass # File might not exist yet
+                
+        self._write_summary(fs, summary_path, summary_data)
+
+        logger.info(f"Successfully saved data ({mode}) and summary to {output_uri}")
+        return {
+            "dataset_name": dataset_name,
+            "final_uri": final_uri,
+            "summary_uri": summary_uri,
+            "row_count": summary_data["row_count"]
+        }
+
+    def save_ray_dataset(self, dataset: ray.data.Dataset, output_uri: str, dataset_name: str, mode: str = "overwrite") -> str:
+        """
+        Partitioned data write to multiple files and generate/update summary metadata
+        """
+        fs, base_path = self._get_fs_and_base_path(output_uri)
+
+        is_default = dataset_name in [VirtualDataset.DEFAULT_STRUCTURED.value, VirtualDataset.DEFAULT_UNSTRUCTURED.value]
+        dir_name = "" if is_default else dataset_name
+        summary_name = "summary.json" if is_default else f"{dataset_name}_summary.json"
+
+        target_dir = posixpath.join(base_path, dir_name)
+        final_uri = posixpath.join(output_uri, dir_name)
+
+        summary_path = posixpath.join(base_path, summary_name)
+        summary_uri = posixpath.join(output_uri, summary_name)
+
+        # Handle Overwrite mode: delete directory contents if not default root
+        if mode == "overwrite" and not is_default:
+            try:
+                fs.delete_dir(target_dir)
+            except Exception:
+                pass
 
         if isinstance(fs, pafs.LocalFileSystem):
             os.makedirs(target_dir, exist_ok=True)
@@ -184,13 +212,22 @@ class OfflineStore:
             "statistics": {} # Advanced distributed stats can be added later
         }
 
+        # Merge row_count if append mode
+        if mode == "append":
+            try:
+                with fs.open_input_stream(summary_path) as file:
+                    old_summary = json.loads(file.read().decode('utf-8'))
+                    summary_data["row_count"] += old_summary.get("row_count", 0)
+            except Exception:
+                pass # File might not exist yet
+
         # Sink Summary
         self._write_summary(fs, summary_path, summary_data)
 
-        logger.info(f"Successfully saved ray dataset and summary to {output_uri}")
+        logger.info(f"Successfully saved ray dataset ({mode}) and summary to {output_uri}")
         return {
             "dataset_name": dataset_name,
             "final_uri": final_uri,
             "summary_uri": summary_uri,
-            "row_count": row_count
+            "row_count": summary_data["row_count"]
         }

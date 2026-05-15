@@ -3,11 +3,13 @@ import json
 import logging
 import base64
 import datetime
+import re
 from typing import Any
 
 # Third party Libraries
 import pyarrow as pa
 import redis
+from redis.commands.json.path import Path
 
 # Local Libraries
 from common.config import settings
@@ -32,7 +34,7 @@ class OnlineStore:
         Serialize data safely for Redis
         """
         if value is None:
-            return DatasetConfig.NULL_VALUE
+            return None
 
         if isinstance(value, bytes):
             return base64.b64encode(value).decode("utf-8")
@@ -41,22 +43,19 @@ class OnlineStore:
             return value.isoformat()
 
         if isinstance(value, (dict, list)):
-            return json.dumps(value, default=str)
+            return value
 
-        return str(value)
+        return value
 
     @staticmethod
     def _deserialize_value(value: str) -> Any:
         """
         Deserialize data
         """
-        if value == DatasetConfig.NULL_VALUE:
+        if value is None or value == DatasetConfig.NULL_VALUE:
             return None
 
-        try:
-            return json.loads(value)
-        except (ValueError, TypeError):
-            return value
+        return value
 
     def _generate_key(self, feature_group: str, row_data: dict[str, Any], entity_keys: list[str]) -> str:
         """
@@ -64,9 +63,9 @@ class OnlineStore:
         """
         try:
             # Best Format: fs:<feature_group_name>:<join_key_1>:<value_1>
+            clean_fg_name = re.sub(r'[^a-zA-Z0-9_-]', '_', feature_group).lower()
             entity_suffix = ":".join([f"{key}:{row_data[key]}" for key in entity_keys])
-
-            return f"fs:{feature_group}:{entity_suffix}"
+            return f"fs:{clean_fg_name}:{entity_suffix}"
         except KeyError as e:
             raise ValueError(f"Missing primary key in data record: {e}")
 
@@ -106,7 +105,7 @@ class OnlineStore:
 
                     if not feature_payload: continue
 
-                    pipeline.hset(redis_key, mapping=feature_payload)
+                    pipeline.json().set(redis_key, Path.root_path(), feature_payload)
 
                     if time_to_live: pipeline.expire(redis_key, time_to_live)
 
@@ -119,8 +118,9 @@ class OnlineStore:
                     logger.warning("[OnlineStore] Row skipped (Redis mapping failure): %s", e)
 
         try:
-            pipeline.execute()
-            logger.info("[OnlineStore] Successfully upserted %d records into: %s", upsert_count, feature_group)
+            if pipeline:
+                pipeline.execute()
+            logger.info("[OnlineStore] Successfully upserted %d JSON documents into: %s", upsert_count, feature_group)
             return upsert_count
         except Exception as e:
             logger.error("[OnlineStore] Failed to execute Redis pipeline: %s", e)
@@ -132,9 +132,10 @@ class OnlineStore:
         """
         key_parts = [f"{key}:{value}" for key, value in entity_keys_dict.items()]
         entity_suffix = ":".join(key_parts)
-        redis_key = f"fs:{feature_group}:{entity_suffix}"
+        clean_fg_name = re.sub(r'[^a-zA-Z0-9_-]', '_', feature_group).lower()
+        redis_key = f"fs:{clean_fg_name}:{entity_suffix}"
 
-        raw_data = self.redis_client.hgetall(redis_key)
+        raw_data = self.redis_client.json().get(redis_key)
 
         if not raw_data:
             return None

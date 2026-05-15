@@ -65,16 +65,9 @@ export interface FeatureInGroupRead {
   description: string | null;
 }
 
-export interface FeatureGroupDetail {
-  id: string;
-  name: string;
-  version: number;
-  status: FeatureGroupStatus;
-  offline_uri: string;
-  updated_at: number | null;
-  created_at: number | null;
-  features: FeatureInGroupRead[];
-  endpoint_url: string;
+export interface StreamingConnectionData {
+  bootstrap_servers: string;
+  topic_name: string;
 }
 
 export interface FeatureGroup {
@@ -97,6 +90,12 @@ export interface FeatureGroup {
   transformation_id: string | null;
 
   transformation?: Transformation | null;
+}
+
+export interface FeatureGroupDetail extends FeatureGroup {
+  features: FeatureInGroupRead[];
+  endpoint_url: string;
+  streaming_data?: StreamingConnectionData | null;
 }
 
 

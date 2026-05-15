@@ -55,6 +55,24 @@ class FeatureStoreGRPCClient:
 
         return response
 
+    async def start_streaming_pipeline(self, request: pb2.StartStreamingRequest) -> pb2.StreamingResponse:
+        """
+        Activate a background Ray Actor to listen to Kafka
+        """
+        stub = pb2_grpc.PipelineServiceStub(self.channel)
+        response = await stub.StartStreamingPipeline(request, timeout=30.0)
+
+        return response
+
+    async def stop_streaming_pipeline(self, request: pb2.StopStreamingRequest) -> pb2.StreamingResponse:
+        """
+        Terminate the Ray Actor and stop the flow
+        """
+        stub = pb2_grpc.PipelineServiceStub(self.channel)
+        response = await stub.StopStreamingPipeline(request, timeout=10.0)
+
+        return response
+
     async def close(self):
         if self._channel:
             await self._channel.close()

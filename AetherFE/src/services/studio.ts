@@ -1,7 +1,7 @@
 import { apiClient } from '@/services/api';
 import type {
   StandardResponse, PaginatedResponse, FeatureGroup, FeatureGroupDetail, FeatureGroupCreate,
-  FeatureGroupUpdate, PreviewRunRequest, TransformationPreview
+  FeatureGroupUpdate, PreviewRunRequest, TransformationPreview, StreamingConnectionData
 } from '@/types';
 
 export const studioApi = {
@@ -19,5 +19,11 @@ export const studioApi = {
   },
   previewTransformation: (payload: PreviewRunRequest): Promise<StandardResponse<TransformationPreview>> => {
     return apiClient.post('/studio/preview', payload);
+  },
+  enableStreaming: (id: string): Promise<StandardResponse<StreamingConnectionData>> => {
+    return apiClient.post(`/studio/feature-groups/${id}/streaming`);
+  },
+  disableStreaming: (id: string): Promise<StandardResponse<void>> => {
+    return apiClient.delete(`/studio/feature-groups/${id}/streaming`);
   }
 };

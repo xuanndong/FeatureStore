@@ -139,6 +139,36 @@ message ExecuteScriptResponse {
 }
 
 
+// Streaming Flow Request & Response
+message StartStreamingRequest {
+    string fg_id = 1;
+    string fg_name = 2;
+    string topic_name = 3;
+    string kafka_servers = 4;
+    string join_key = 5;
+    SourceFormat source_format = 6;
+
+    bool has_transformation = 7;
+    TransformationType transformation_type = 8;
+    string transformation_definition = 9;
+
+    // Sink configuration
+    string output_uri = 10;           // s3://aether-offline-store/feature_groups/{fg_id}
+    repeated string entity_keys = 11; // Primary key columns for Redis upsert
+    optional int32 time_to_live = 12; // Redis TTL (seconds). Default = 7 days
+    bool sync_online = 13;            // Whether to write to Online Store (Redis)
+}
+
+message StopStreamingRequest {
+    string fg_id = 1;
+}
+
+message StreamingResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+
 // Service Interface
 service PipelineService {
     // Quick Formula Test & UI Data Preview
@@ -152,4 +182,10 @@ service PipelineService {
 
     // Run user Python code on Ray Cluster
     rpc ExecuteUserScript (ExecuteScriptRequest) returns (ExecuteScriptResponse);
+
+    // Activate a background Ray Actor to listen to Kafka
+    rpc StartStreamingPipeline (StartStreamingRequest) returns (StreamingResponse);
+
+    // Terminate the Ray Actor and stop the flow
+    rpc StopStreamingPipeline (StopStreamingRequest) returns (StreamingResponse);
 }

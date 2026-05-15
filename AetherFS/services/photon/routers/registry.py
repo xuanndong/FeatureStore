@@ -7,12 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, func
 
 # Local Libraries
+from common.database.connection import get_session
 from common.database.models import Entity, DataSource
 from services.photon.schemas.registry import EntityCreate, EntityRead, DataSourceCreate, DataSourceRead, EntityUpdate, DataSourceUpdate, ConnectionTestRequest, OptionRead, EntityOption
 from services.photon.core.responses import StandardResponse
 from services.photon.core.dependencies import verify_api_version, PaginationParams
 from services.photon.core.utils import verify_connection
-from common.database.connection import get_session
 
 
 router = APIRouter(prefix="/registry", tags=["Infrastructure Registry"])

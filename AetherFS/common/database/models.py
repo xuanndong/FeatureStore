@@ -61,7 +61,14 @@ class DataSource(SQLModel, table=True):
     created_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float))
 
     # Relationships
-    feature_groups: list["FeatureGroup"] = Relationship(back_populates="source")
+    feature_groups: list["FeatureGroup"] = Relationship(
+        back_populates="source",
+        sa_relationship_kwargs={"foreign_keys": "FeatureGroup.source_id"}
+    )
+    online_feature_groups: list["FeatureGroup"] = Relationship(
+        back_populates="online_source",
+        sa_relationship_kwargs={"foreign_keys": "FeatureGroup.online_source_id"}
+    )
 
 
 class Transformation(SQLModel, table=True):
@@ -113,7 +120,8 @@ class FeatureGroup(SQLModel, table=True):
     next_run_at: float | None = Field(default=None, sa_column=Column(Float))
 
     entity_id: UUID = Field(foreign_key="entities.id", ondelete="CASCADE", index=True)
-    source_id: UUID = Field(foreign_key="data_sources.id", ondelete="CASCADE", index=True)
+    source_id: UUID = Field(foreign_key="data_sources.id", ondelete="CASCADE", index=True) # # Trỏ tới BATCH
+    online_source_id: UUID | None = Field(foreign_key="data_sources.id", default=None, index=True) # Trỏ tới Kafka
     transformation_id: UUID | None = Field(foreign_key="transformations.id", default=None, index=True)
 
     updated_at: float = Field(default_factory=currentTimeUTC, sa_column=Column(Float, onupdate=currentTimeUTC))
@@ -121,7 +129,14 @@ class FeatureGroup(SQLModel, table=True):
 
     # Relationships
     entity: Entity = Relationship(back_populates="feature_groups")
-    source: DataSource = Relationship(back_populates="feature_groups")
+    source: DataSource = Relationship(
+        back_populates="feature_groups",
+        sa_relationship_kwargs={"foreign_keys": "FeatureGroup.source_id"}
+    )
+    online_source: DataSource | None = Relationship(
+        back_populates="online_feature_groups",
+        sa_relationship_kwargs={"foreign_keys": "FeatureGroup.online_source_id"}
+    )
     transformation: Transformation | None = Relationship(back_populates="feature_groups")
     features: list["Feature"] = Relationship(back_populates="group")
 

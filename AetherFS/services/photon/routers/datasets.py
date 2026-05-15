@@ -1,7 +1,6 @@
 # Standard Libraries
 import uuid
 import json
-from datetime import datetime, timezone
 
 # Third party Libraries
 import s3fs

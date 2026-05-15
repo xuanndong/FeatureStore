@@ -12,7 +12,7 @@ asyncpg
 psycopg2-binary
 
 # --- Messaging & Cache ---
-aiokafka
+confluent-kafka
 redis
 
 # --- Storage Connectors & Query Engine ---

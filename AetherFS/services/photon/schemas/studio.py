@@ -32,6 +32,11 @@ class FeatureCreate(BaseModel):
     data_type: str
 
 
+class StreamingConnectionData(BaseModel):
+    bootstrap_servers: str
+    topic_name: str
+
+
 class FeatureGroupCreate(BaseModel):
     name: str = Field(..., max_length=100, description="Feature Group Name")
     use_online_store: bool = Field(default=False)
@@ -130,22 +135,11 @@ class FeatureInGroupRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class FeatureGroupDetail(BaseModel):
-    id: UUID
-    name: str
-    version: int
-    status: FeatureGroupStatus
-
+class FeatureGroupDetail(FeatureGroupRead):
     offline_uri: str
-    
-    updated_at: float | None = None
-    created_at: float | None = None
-
     features: list[FeatureInGroupRead] = []
-
     endpoint_url: str
-
-    model_config = ConfigDict(from_attributes=True)
+    streaming_data: StreamingConnectionData | None = None
 
 
 class FeatureGroupUpdate(BaseModel):

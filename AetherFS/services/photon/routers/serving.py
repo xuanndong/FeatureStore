@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 # Third party Libraries
 from fastapi import APIRouter, Depends, HTTPException, status
 import redis.asyncio as aioredis
+import json
 
 # Local Libraries
 from services.photon.core.responses import StandardResponse
@@ -69,6 +70,56 @@ async def fetch_online_features(
                 "key": redis_key,
                 "features": feature_data
             }
+        )
+    except aioredis.RedisError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Redis retrieval error: {str(e)}"
+        )
+
+
+@router.get("/features/keys", response_model=StandardResponse[list[str]])
+async def get_redis_keys(
+    redis: aioredis.Redis = Depends(get_redis),
+    version: str = Depends(verify_api_version)
+):
+    """
+    Get all feature keys from Redis
+    """
+    try:
+        keys = await redis.keys("fs:*")
+        return StandardResponse(
+            detail="Keys retrieved successfully",
+            data=keys
+        )
+    except aioredis.RedisError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Redis retrieval error: {str(e)}"
+        )
+
+@router.get("/features/get", response_model=StandardResponse[dict])
+async def get_redis_feature(
+    key: str,
+    redis: aioredis.Redis = Depends(get_redis),
+    version: str = Depends(verify_api_version)
+):
+    """
+    Get a specific feature as JSON
+    """
+    try:
+        # Fetch raw JSON string from Redis ReJSON
+        raw_data = await redis.execute_command("JSON.GET", key)
+        if not raw_data:
+            return StandardResponse(
+                detail=f"Online data not found for key: {key}",
+                data=None
+            )
+        
+        parsed_data = json.loads(raw_data)
+        return StandardResponse(
+            detail="Online data retrieval successful",
+            data=parsed_data
         )
     except aioredis.RedisError as e:
         raise HTTPException(

@@ -1,7 +1,12 @@
 # Standard Libraries
 import json
 import uuid
+import asyncio
+import re
+import logging
 from datetime import timezone, datetime
+
+logger = logging.getLogger(__name__)
 
 # Third party Libraries
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
@@ -14,13 +19,14 @@ import grpc
 from common.database.models import DataSource, FeatureGroup, Transformation, Entity, Feature
 from common.database.connection import get_session
 from common.grpc import featurePipeline_pb2 as pb2
-from common.constants import Materialization, FeatureGroupStatus
+from common.constants import Materialization, FeatureGroupStatus, SourceFormat, SourceType
+from common.kafkaManager import kafka_service
 from common.config import settings
-from services.photon.schemas.studio import FeatureGroupCreate, PreviewRunRequest, StatusPayload, FeatureGroupRead, FeatureGroupUpdate, FeatureGroupDetail
+from services.photon.schemas.studio import FeatureGroupCreate, PreviewRunRequest, StatusPayload, FeatureGroupRead, FeatureGroupUpdate, FeatureGroupDetail, StreamingConnectionData, FeatureCreate
 from services.photon.core.responses import StandardResponse
 from services.photon.core.dependencies import verify_api_version, PaginationParams
-from services.photon.core.grpcClient import grpc_client
 from services.photon.core.utils import infer_features_from_records, calculate_next_run, generate_strict_hash
+from services.photon.core.grpcClient import grpc_client
 from services.photon.core.websocket import manager
 
 
@@ -450,7 +456,11 @@ async def get_feature_group(
     query = (
         select(FeatureGroup)
         .where(FeatureGroup.id == id)
-        .options(selectinload(FeatureGroup.features))
+        .options(
+            selectinload(FeatureGroup.features),
+            selectinload(FeatureGroup.online_source),
+            selectinload(FeatureGroup.transformation)
+        )
     )
 
     result = await db.execute(query)
@@ -462,16 +472,34 @@ async def get_feature_group(
             detail="Feature group not found"
         )
 
+    streaming_info = None
+    if fg.online_source_id and fg.online_source:
+        topic_name = fg.online_source.connection_options.get("topic")
+        
+        streaming_info = StreamingConnectionData(
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+            topic_name=topic_name
+        )
+
     data = FeatureGroupDetail(
         id=fg.id,
         name=fg.name,
         version=fg.version,
         status=fg.status,
-        offline_uri=fg.offline_uri,
+        offline_uri=fg.offline_uri or "",
+        last_run_status=fg.last_run_status,
+        is_scheduled=fg.is_scheduled,
+        cron_expression=fg.cron_expression,
+        next_run_at=fg.next_run_at,
         updated_at=fg.updated_at,
         created_at=fg.created_at,
+        entity_id=fg.entity_id,
+        source_id=fg.source_id,
+        transformation_id=fg.transformation_id,
+        transformation=fg.transformation,
         features=fg.features,
-        endpoint_url=settings.MINIO_ENDPOINT
+        endpoint_url=settings.MINIO_ENDPOINT,
+        streaming_data=streaming_info
     )
 
     return StandardResponse(data=data)
@@ -568,6 +596,175 @@ async def delete_feature_group(
         detail="Delete feature group successfully",
         data={"id": str(id), "action": "deleted"}
     )
+
+
+@router.post("/feature-groups/{id}/streaming", response_model=StandardResponse[StreamingConnectionData])
+async def enable_streaming(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_session),
+    version: str = Depends(verify_api_version)
+):
+    """
+    Activate streaming flow for a Feature Group
+    """
+    stmt = (
+        select(FeatureGroup)
+        .where(FeatureGroup.id == id)
+        .options(
+            selectinload(FeatureGroup.transformation),
+            selectinload(FeatureGroup.source),
+            selectinload(FeatureGroup.entity),
+        )
+    )
+    result = await db.execute(stmt)
+    fg = result.scalar_one_or_none()
+
+    if not fg:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feature Group does not exist"
+        )
+
+    if fg.status != FeatureGroupStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Operation denied: Feature Group is in '{fg.status}' state"
+        )
+
+    if fg.online_source_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Streaming is already activated for this Feature Group"
+        )
+
+    sanitized_name = re.sub(r'[^a-zA-Z0-9\.\_\-]', '_', fg.name)
+    topic_name = f"aether_streaming_{sanitized_name}_v{fg.version}_{fg.id.hex[:8]}"
+    try:
+        await asyncio.to_thread(kafka_service.create_feature_topic, topic_name)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Kafka infrastructure error: {str(e)}"
+        )
+
+    streaming_source = DataSource(
+        name=f"Stream for {fg.name}",
+        source_type=SourceType.STREAM, 
+        source_format=SourceFormat.JSON, 
+        location_uri=f"kafka://{topic_name}",
+        connection_options={
+            "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
+            "topic": topic_name,
+            "auto.offset.reset": "latest"
+        }
+    )
+    db.add(streaming_source)
+    await db.flush()
+
+    fg.online_source_id = streaming_source.id
+    await db.commit()
+
+    # Build gRPC request to spawn the detached streaming actor
+    if not fg.source or not fg.source.source_format:
+        format_name = SourceFormat.JSON.value
+    else:
+        source_format = fg.source.source_format
+        format_name = source_format.name if hasattr(source_format, 'name') else str(source_format).upper()
+
+    proto_source_format = getattr(pb2.SourceFormat, format_name, pb2.SourceFormat.UNKNOWN_FORMAT)
+
+    has_trans = fg.transformation is not None
+    proto_trans_type = pb2.TransformationType.UNKNOWN_TYPE
+    trans_def = ""
+
+    if has_trans:
+        t_type_val = fg.transformation.t_type
+        transform_name = t_type_val.name if hasattr(t_type_val, 'name') else str(t_type_val).upper()
+        proto_trans_type = getattr(pb2.TransformationType, transform_name, pb2.TransformationType.UNKNOWN_TYPE)
+        trans_def = fg.transformation.definition
+
+    join_key = fg.entity.join_key if fg.entity else ""
+    entity_keys_list = [join_key] if join_key else []
+
+    grpc_req = pb2.StartStreamingRequest(
+        fg_id=str(fg.id),
+        fg_name=fg.name,
+        topic_name=topic_name,
+        kafka_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+        join_key=join_key,
+        source_format=proto_source_format,
+        has_transformation=has_trans,
+        transformation_type=proto_trans_type,
+        transformation_definition=trans_def,
+        output_uri=fg.offline_uri or "",
+        entity_keys=entity_keys_list,
+        sync_online=True,
+    )
+
+    try:
+        await grpc_client.start_streaming_pipeline(grpc_req)
+    except Exception as e:
+        logger.warning("gRPC call to start streaming actor failed (non-fatal, actor may still spawn): %s", e)
+
+
+    return StandardResponse(
+        detail="Streaming endpoint created successfully.",
+        data=StreamingConnectionData(
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+            topic_name=topic_name,
+        )
+    )
+
+
+@router.delete("/feature-groups/{id}/streaming", response_model=StandardResponse[None])
+async def disable_streaming(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_session),
+    version: str = Depends(verify_api_version)
+):
+    stmt = select(FeatureGroup).where(FeatureGroup.id == id).options(selectinload(FeatureGroup.online_source))
+    result = await db.execute(stmt)
+    fg = result.scalar_one_or_none()
+
+    if not fg:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feature Group does not exist"
+        )
+    if not fg.online_source_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Streaming flow is not active for this Feature Group"
+        )
+
+    try:
+        grpc_req = pb2.StopStreamingRequest(fg_id=str(fg.id))
+        await grpc_client.stop_streaming_pipeline(grpc_req)
+    except Exception:
+        pass
+
+    streaming_source = fg.online_source
+    topic_name = streaming_source.connection_options.get("topic") if streaming_source else None
+
+    try:
+        if topic_name:
+            await asyncio.to_thread(kafka_service.delete_feature_topic, topic_name)
+
+        fg.online_source_id = None
+        await db.delete(streaming_source)
+
+        await db.commit()
+
+        return StandardResponse(
+            detail="Successfully stopped the streaming flow and released infrastructure resources",
+            data=None
+        )
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"System error occurred while revoking streaming resources: {str(e)}"
+        )
 
 
 @router.websocket("/ws/feature-groups")

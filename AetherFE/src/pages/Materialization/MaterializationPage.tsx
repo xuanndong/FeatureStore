@@ -13,7 +13,7 @@ export const MaterializationPage: React.FC = () => {
         <button onClick={() => setActiveStore(null)} style={{ marginBottom: '20px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, padding: 0 }}>
           ← Chọn Store khác
         </button>
-        <FeatureMarketPage />
+        <FeatureMarketPage mode="OFFLINE" />
       </div>
     );
   }
@@ -21,7 +21,7 @@ export const MaterializationPage: React.FC = () => {
   // Render Online Store
   if (activeStore === 'ONLINE') {
     return (
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1300px', margin: '0 auto' }}>
         <button onClick={() => setActiveStore(null)} style={{ marginBottom: '20px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, padding: 0 }}>
           ← Chọn Store khác
         </button>

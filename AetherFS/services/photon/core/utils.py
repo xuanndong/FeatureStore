@@ -118,3 +118,19 @@ def generate_strict_hash(t_type: str, definition: str, features: list, requireme
     raw_content = f"{t_type}|{clean_code}|{clean_features}|{req_string}"
 
     return hashlib.sha256(raw_content.encode('utf-8')).hexdigest()
+
+
+def generate_producer_snippet(topic_name: str) -> str:
+    return f"""
+from confluent_kafka import Producer
+import json
+
+producer = Producer({{'bootstrap.servers': 'YOUR_PUBLIC_KAFKA_IP:9092'}})
+
+def send_realtime_feature(data: dict):
+    producer.produce(
+        topic='{topic_name}',
+        value=json.dumps(data).encode('utf-8')
+    )
+    producer.poll(0)
+    """

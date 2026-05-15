@@ -9,7 +9,11 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { DatasetCard } from '@/pages/Materialization/DatasetCard';
 import { DatasetSearch } from '@/pages/Materialization/DatasetSearch';
 
-export const FeatureMarketPage: React.FC = () => {
+interface FeatureMarketPageProps {
+  mode?: 'OFFLINE' | 'ONLINE';
+}
+
+export const FeatureMarketPage: React.FC<FeatureMarketPageProps> = ({ mode = 'OFFLINE' }) => {
   const navigate = useNavigate();
   const { showNotification } = useNotification();
   
@@ -36,16 +40,20 @@ export const FeatureMarketPage: React.FC = () => {
   }, []);
 
   const handleDatasetClick = (datasetId: string, datasetType: string) => {
-    navigate(`/materialization/workspace/${datasetId}?type=${datasetType}`);
+    navigate(`/materialization/workspace/${datasetId}?type=${datasetType}&mode=${mode}`);
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '8px' }}>Offline Feature Market</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '8px' }}>
+            {mode === 'OFFLINE' ? 'Offline Feature Market' : 'Online Feature Market'}
+          </h1>
           <p style={{ color: 'var(--text-secondary)' }}>
-            Khám phá, tích hợp hoặc thực thi mã nguồn huấn luyện trực tiếp trên các tập dữ liệu Materialized.
+            {mode === 'OFFLINE' 
+              ? 'Khám phá, tích hợp hoặc thực thi mã nguồn huấn luyện trực tiếp trên các tập dữ liệu Materialized.'
+              : 'Khám phá và lấy thông tin kết nối thời gian thực đến các đặc trưng trên Redis Stack.'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '18px', alignItems: 'center' }}>

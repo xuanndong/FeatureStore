@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Layers, Eye, Search, Database, Fingerprint,
+  LayoutDashboard, Layers, Eye, Database, Fingerprint,
   RefreshCcw,
 } from 'lucide-react';
 
@@ -22,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: 'Data Sources', path: '/data-sources', icon: Database },
   { name: 'Materialization', path: '/materialization', icon: RefreshCcw },
   { name: 'Feature Views', path: '/feature-views', icon: Eye },
-  { name: 'Online Explorer', path: '/online-explorer', icon: Search },
+  // { name: 'Online Explorer', path: '/online-explorer', icon: Search },
 ];
 
 export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ isCollapsed }) => {

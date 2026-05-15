@@ -202,6 +202,8 @@ class BatchPipelineRunner:
             logger.info("No data to process")
             return {}
 
+        mode = "append" if read_policy == ReadPolicies.NEW_VALUES else "overwrite"
+
         match transform_type:
             case TransformationType.PYTHON_UDF:
                 # Save Offline Storage
@@ -217,7 +219,8 @@ class BatchPipelineRunner:
                     connection_options=connection_options,
                     target_datasets=target_datasets,
                     entity_keys=entity_keys,
-                    sync_online=sync_online
+                    sync_online=sync_online,
+                    mode=mode
                 )
 
             case TransformationType.SQL:
@@ -237,7 +240,7 @@ class BatchPipelineRunner:
                         result_table = result_data.read_all() if hasattr(result_data, 'read_all') else result_data
 
                         # Save Offline Storage
-                        saved_metadata[ds_name] = self.offline_store.save_pyarrow_table(result_table, output_uri, ds_name)
+                        saved_metadata[ds_name] = self.offline_store.save_pyarrow_table(result_table, output_uri, ds_name, mode=mode)
 
                         # Save to Online Storage for Real-time Inference
                         if not entity_keys or not sync_online: continue
@@ -271,7 +274,7 @@ class BatchPipelineRunner:
                         result_table = result_data.read_all() if hasattr(result_data, 'read_all') else result_data
 
                         # Save Offline Storage
-                        saved_metadata[ds_name] = self.offline_store.save_pyarrow_table(result_table, output_uri, ds_name)
+                        saved_metadata[ds_name] = self.offline_store.save_pyarrow_table(result_table, output_uri, ds_name, mode=mode)
 
                         # Save to Online Storage for Real-time Inference
                         if not entity_keys or not sync_online: continue

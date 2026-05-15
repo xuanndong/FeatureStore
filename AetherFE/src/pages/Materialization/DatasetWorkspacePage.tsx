@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { 
-  Terminal, Copy, Play, Loader2, Database, Table2, 
+import {
+  Terminal, Copy, Play, Loader2, Database, Table2,
   Layers, Share2, ShieldCheck, Image as ImageIcon,
   CheckCircle2, AlertCircle, Cpu, Clock, Package
 } from 'lucide-react';
@@ -15,12 +15,13 @@ export const DatasetWorkspacePage: React.FC = () => {
   const { datasetId } = useParams<{ datasetId: string }>();
   const [searchParams] = useSearchParams();
   const datasetType = searchParams.get('type') || 'GROUP';
+  const mode = searchParams.get('mode') || 'OFFLINE';
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'api' | 'workspace'>('workspace');
 
   // State Context
-  const [features, setFeatures] = useState<any[]>([]); 
+  const [features, setFeatures] = useState<any[]>([]);
   const [datasetName, setDatasetName] = useState<string>('Đang tải...');
   const [createdAt, setCreatedAt] = useState<number | null>(null);
   const [endpointURL, setEndpointURL] = useState<string>("http://localhost:9000");
@@ -34,7 +35,7 @@ export const DatasetWorkspacePage: React.FC = () => {
   const [code, setCode] = useState("");
   // Requirements
   const [requirements, setRequirements] = useState("");
-  
+
   const [isRunning, setIsRunning] = useState(false);
   const [execResult, setExecResult] = useState<ScriptExecutionData | null>(null);
   const [execError, setExecError] = useState<string | null>(null);
@@ -82,19 +83,19 @@ if __name__ == "__main__":
         if (datasetType === 'VIEW') {
           const res = await viewsApi.getFeatureViewDetail(datasetId);
           if (res.data) {
-             setDatasetName(res.data.name);
-             if (res.data.created_at) setCreatedAt(res.data.created_at);
-             if (res.data.features) setFeatures(res.data.features as any);
-             if (res.data.endpoint_url) setEndpointURL(res.data.endpoint_url);
+            setDatasetName(res.data.name);
+            if (res.data.created_at) setCreatedAt(res.data.created_at);
+            if (res.data.features) setFeatures(res.data.features as any);
+            if (res.data.endpoint_url) setEndpointURL(res.data.endpoint_url);
           }
         } else {
           const gRes = await studioApi.getFeatureGroup(datasetId);
           if (gRes.data) {
-             const group = gRes.data;
-             setDatasetName(group.name);
-             if (group.created_at) setCreatedAt(group.created_at);
-             if (group.features) setFeatures(group.features as any);
-             if (group.endpoint_url) setEndpointURL(group.endpoint_url);
+            const group = gRes.data;
+            setDatasetName(group.name);
+            if (group.created_at) setCreatedAt(group.created_at);
+            if (group.features) setFeatures(group.features as any);
+            if (group.endpoint_url) setEndpointURL(group.endpoint_url);
           }
         }
       } catch (err) {
@@ -124,14 +125,14 @@ if __name__ == "__main__":
     setIsRunning(true);
     setExecResult(null);
     setExecError(null);
-    
+
     const reqArray = requirements.split(',').map(r => r.trim()).filter(Boolean);
 
     try {
-      const response = await datasetsApi.runExperiment({ 
+      const response = await datasetsApi.runExperiment({
         dataset_id: datasetId,
         dataset_type: datasetType as any,
-        code, 
+        code,
         requirements: reqArray
       });
       setExecResult(response.data);
@@ -159,11 +160,46 @@ BASE_URI = "${accessInfo.dataset_uri}"
 search_pattern = BASE_URI.replace("s3://", "").rstrip("/") + "/**/*.parquet"
 parquet_files = fs.glob(search_pattern)
 
-if parquet_files:
-    dataset = ds.dataset(parquet_files, format="parquet", filesystem=fs)
-    df = dataset.to_table().to_pandas()
-    print(f"Tong so dong: {len(df)}")
-    print(df.head())`;
+    if (!parquet_files):
+        print("Không tìm thấy dữ liệu.")
+    else:
+        dataset = ds.dataset(parquet_files, format="parquet", filesystem=fs)
+        df = dataset.to_table().to_pandas()
+        print(f"Tong so dong: {len(df)}")
+        print(df.head())`;
+  };
+
+  const generateOnlinePythonSnippet = () => {
+    const cleanFgName = datasetName.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    const sampleKey = features.length > 0 && features[0].is_primary ? features[0].name : 'entity_key';
+
+    return `import redis
+import json
+
+# 1. Khởi tạo kết nối đến Redis Stack (Online Store)
+redis_client = redis.Redis(
+    host='localhost', 
+    port=6379, 
+    decode_responses=True
+)
+
+# 2. Thông tin tra cứu (Thay đổi giá trị tương ứng)
+feature_group = "${cleanFgName}"
+entity_key_name = "${sampleKey}"
+entity_value = "your_entity_id"  # ĐIỀN ID THỰC TẾ CỦA BẠN VÀO ĐÂY
+
+# 3. Tạo Redis Key theo đúng chuẩn AetherFS
+redis_key = f"fs:{feature_group}:{entity_key_name}:{entity_value}"
+
+# 4. Lấy dữ liệu Real-time (Low-Latency Point Lookup)
+raw_data = redis_client.json().get(redis_key)
+
+if raw_data:
+    print(f"Đã lấy được Online Features cho {entity_value}:")
+    print(json.dumps(raw_data, indent=2))
+else:
+    print(f"Không tìm thấy dữ liệu cho khóa {redis_key}")
+`;
   };
 
   return (
@@ -175,17 +211,17 @@ if parquet_files:
       {/* METADATA HEADER */}
       <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-color)', marginBottom: '24px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
         <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '24px', color: 'var(--text-main)' }}>Workspace: {datasetName}</h2>
-        
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ background: '#fff', padding: '10px', borderRadius: '8px', color: 'var(--primary)' }}><Database size={20}/></div>
+            <div style={{ background: '#fff', padding: '10px', borderRadius: '8px', color: 'var(--primary)' }}><Database size={20} /></div>
             <div>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: 600 }}>LOẠI DỮ LIỆU</p>
               <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)' }}>{datasetType === 'GROUP' ? 'Feature Group' : 'Feature View'}</p>
             </div>
           </div>
           <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ background: '#fff', padding: '10px', borderRadius: '8px', color: '#10b981' }}><Layers size={20}/></div>
+            <div style={{ background: '#fff', padding: '10px', borderRadius: '8px', color: '#10b981' }}><Layers size={20} /></div>
             <div>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: 600 }}>NGÀY TẠO</p>
               <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)' }}>{createdAt ? new Date(createdAt * 1000).toLocaleDateString('vi-VN') : 'Đang tải...'}</p>
@@ -213,12 +249,20 @@ if parquet_files:
 
       {/* TABS */}
       <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--border-color)', marginBottom: '24px' }}>
-        <button onClick={() => setActiveTab('api')} style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 600, fontSize: '15px', borderBottom: activeTab === 'api' ? '2px solid var(--primary)' : '2px solid transparent', color: activeTab === 'api' ? 'var(--primary)' : 'var(--text-secondary)' }}>
-          <Share2 size={18} /> Get Pre-signed URL
-        </button>
-        <button onClick={() => setActiveTab('workspace')} style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 600, fontSize: '15px', borderBottom: activeTab === 'workspace' ? '2px solid var(--primary)' : '2px solid transparent', color: activeTab === 'workspace' ? 'var(--primary)' : 'var(--text-secondary)' }}>
-          <Terminal size={18} /> Train In-system
-        </button>
+        {mode === 'OFFLINE' ? (
+          <>
+            <button onClick={() => setActiveTab('api')} style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 600, fontSize: '15px', borderBottom: activeTab === 'api' ? '2px solid var(--primary)' : '2px solid transparent', color: activeTab === 'api' ? 'var(--primary)' : 'var(--text-secondary)' }}>
+              <Share2 size={18} /> Get Pre-signed URL
+            </button>
+            <button onClick={() => setActiveTab('workspace')} style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 600, fontSize: '15px', borderBottom: activeTab === 'workspace' ? '2px solid var(--primary)' : '2px solid transparent', color: activeTab === 'workspace' ? 'var(--primary)' : 'var(--text-secondary)' }}>
+              <Terminal size={18} /> Train In-system
+            </button>
+          </>
+        ) : (
+          <button style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 600, fontSize: '15px', borderBottom: '2px solid var(--primary)', color: 'var(--primary)' }}>
+            <Database size={18} /> Redis Connection Snippet
+          </button>
+        )}
       </div>
 
       <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
@@ -236,8 +280,8 @@ if parquet_files:
             </div>
 
             <div style={{ marginBottom: '24px', display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <button 
-                onClick={handleGenerateUrl} 
+              <button
+                onClick={handleGenerateUrl}
                 disabled={loadingApi}
                 style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: loadingApi ? 'not-allowed' : 'pointer', fontSize: '14px' }}
               >
@@ -264,19 +308,41 @@ if parquet_files:
                   </div>
                 </div>
 
-                <div style={{ position: 'relative', background: '#1e1e1e', borderRadius: '12px', padding: '24px', border: '1px solid #333' }}>
-                  <button 
-                    onClick={() => navigator.clipboard.writeText(generatePythonSnippet())} 
-                    style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500 }}
+                <div style={{ position: 'relative', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', height: '400px' }}>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(generatePythonSnippet())}
+                    style={{ position: 'absolute', zIndex: 10, top: '16px', right: '16px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500 }}
                   >
                     <Copy size={16} /> Copy Code
                   </button>
-                  <pre style={{ margin: 0, color: '#e5e5e5', fontFamily: 'monospace', fontSize: '14px' }}>
-                    <code>{generatePythonSnippet()}</code>
-                  </pre>
+                  <Editor
+                    height="100%"
+                    defaultLanguage="python"
+                    theme="vs-dark"
+                    value={generatePythonSnippet()}
+                    options={{ minimap: { enabled: false }, readOnly: true, fontSize: 14, padding: { top: 20, bottom: 20 }, fontLigatures: true }}
+                  />
                 </div>
               </div>
             )}
+          </div>
+        ) : mode === 'ONLINE' ? (
+          <div style={{ padding: '32px' }}>
+            <div style={{ position: 'relative', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', height: '500px' }}>
+              <button
+                onClick={() => navigator.clipboard.writeText(generateOnlinePythonSnippet())}
+                style={{ position: 'absolute', zIndex: 10, top: '16px', right: '16px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500 }}
+              >
+                <Copy size={16} /> Copy Code
+              </button>
+              <Editor
+                height="100%"
+                defaultLanguage="python"
+                theme="vs-dark"
+                value={generateOnlinePythonSnippet()}
+                options={{ minimap: { enabled: false }, readOnly: true, fontSize: 14, padding: { top: 20, bottom: 20 }, fontLigatures: true }}
+              />
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: '700px' }}>
@@ -284,16 +350,16 @@ if parquet_files:
             <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Terminal size={16}/>
+                  <Terminal size={16} />
                   <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-main)' }}>Monaco Workspace</span>
                 </div>
-                
+
                 {/* INPUT REQUIREMENTS */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Package size={16} color="var(--text-secondary)" />
                   <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Pip Packages:</span>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={requirements}
                     onChange={(e) => setRequirements(e.target.value)}
                     placeholder="pandas, scikit-learn, xgboost==1.7.0"
@@ -302,37 +368,37 @@ if parquet_files:
                 </div>
               </div>
 
-              <button 
-                onClick={handleRunCode} 
-                disabled={isRunning} 
+              <button
+                onClick={handleRunCode}
+                disabled={isRunning}
                 style={{ background: isRunning ? '#94a3b8' : '#10b981', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 700, cursor: isRunning ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: isRunning ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)', transition: '0.2s' }}
               >
-                {isRunning ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="#fff" />} 
+                {isRunning ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="#fff" />}
                 {isRunning ? 'Đang thực thi...' : 'Chạy mã nguồn'}
               </button>
             </div>
-            
+
             <div style={{ display: 'flex', flex: 1, minHeight: '650px' }}>
               {/* EDITOR */}
               <div style={{ flex: 6.5, borderRight: '1px solid var(--border-color)' }}>
-                <Editor 
-                  height="100%" 
-                  defaultLanguage="python" 
-                  theme="vs-dark" 
-                  value={code} 
-                  onChange={(val) => setCode(val || '')} 
-                  options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 20, bottom: 20 }, fontLigatures: true }} 
+                <Editor
+                  height="100%"
+                  defaultLanguage="python"
+                  theme="vs-dark"
+                  value={code}
+                  onChange={(val) => setCode(val || '')}
+                  options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 20, bottom: 20 }, fontLigatures: true }}
                 />
               </div>
-              
+
               {/* CONSOLE OUTPUT */}
               <div style={{ flex: 3.5, background: '#0f172a', color: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '12px 16px', background: '#1e293b', fontSize: '12px', fontWeight: 700, borderBottom: '1px solid #334155', letterSpacing: '0.5px', color: '#94a3b8' }}>
                   CONSOLE OUTPUT & PLOTS
                 </div>
-                
+
                 <div style={{ padding: '20px', overflowY: 'auto', flex: 1, fontFamily: 'Fira Code, SFMono-Regular, monospace', fontSize: '13px', lineHeight: 1.6 }}>
-                  
+
                   {isRunning && (
                     <div style={{ color: '#38bdf8', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Loader2 size={14} className="animate-spin" /> $ Đang cấu hình môi trường & phân bổ task đến Ray Cluster...
@@ -340,28 +406,28 @@ if parquet_files:
                   )}
 
                   {execError && (
-                     <div style={{ color: '#f87171', whiteSpace: 'pre-wrap', marginTop: '8px', background: 'rgba(248, 113, 113, 0.1)', padding: '16px', borderRadius: '8px', borderLeft: '4px solid #ef4444' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: 700 }}>
-                          <AlertCircle size={16} /> LỖI THỰC THI (Runtime Error)
-                        </div>
-                        {execError}
-                     </div>
+                    <div style={{ color: '#f87171', whiteSpace: 'pre-wrap', marginTop: '8px', background: 'rgba(248, 113, 113, 0.1)', padding: '16px', borderRadius: '8px', borderLeft: '4px solid #ef4444' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: 700 }}>
+                        <AlertCircle size={16} /> LỖI THỰC THI (Runtime Error)
+                      </div>
+                      {execError}
+                    </div>
                   )}
-                  
+
                   {execResult && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                       {/* SCALARS */}
                       {execResult.analytics?.scalars && execResult.analytics.scalars.length > 0 && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                           {execResult.analytics.scalars.map((s, idx) => (
-                              <div key={idx} style={{ background: '#1e293b', padding: '12px', borderRadius: '10px', border: '1px solid #334155' }}>
-                                 <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    {s.name.toLowerCase().includes('time') ? <Clock size={12}/> : <Cpu size={12}/>}
-                                    {s.name}
-                                 </div>
-                                 <div style={{ fontSize: '16px', fontWeight: 700, color: '#38bdf8' }}>{s.value} <span style={{ fontSize: '12px', color: '#64748b' }}>{s.unit || ''}</span></div>
+                          {execResult.analytics.scalars.map((s, idx) => (
+                            <div key={idx} style={{ background: '#1e293b', padding: '12px', borderRadius: '10px', border: '1px solid #334155' }}>
+                              <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                {s.name.toLowerCase().includes('time') ? <Clock size={12} /> : <Cpu size={12} />}
+                                {s.name}
                               </div>
-                           ))}
+                              <div style={{ fontSize: '16px', fontWeight: 700, color: '#38bdf8' }}>{s.value} <span style={{ fontSize: '12px', color: '#64748b' }}>{s.unit || ''}</span></div>
+                            </div>
+                          ))}
                         </div>
                       )}
 
@@ -369,7 +435,7 @@ if parquet_files:
                       {execResult.logs && execResult.logs.trim() !== "" && (
                         <div style={{ background: '#000', borderRadius: '10px', border: '1px solid #1e293b', overflow: 'hidden' }}>
                           <div style={{ background: '#1e293b', padding: '6px 12px', fontSize: '10px', color: '#94a3b8' }}>
-                              STDOUT
+                            STDOUT
                           </div>
                           <div style={{ padding: '16px' }}>
                             <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#e2e8f0', fontSize: '12px' }}>
@@ -378,26 +444,26 @@ if parquet_files:
                           </div>
                         </div>
                       )}
-                      
+
                       {/* IMAGES */}
                       {execResult.analytics?.images && execResult.analytics.images.length > 0 && (
-                         <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed #334155' }}>
-                            <strong style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <ImageIcon size={14} /> GENERATED PLOTS ({execResult.analytics.images.length})
-                            </strong>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                               {execResult.analytics.images.map((img: any, idx: number) => (
-                                 <div key={idx} style={{ background: '#fff', borderRadius: '8px', padding: '12px', textAlign: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
-                                    {img.title && <h5 style={{ color: '#1e293b', margin: '0 0 10px 0', fontSize: '13px' }}>{img.title}</h5>}
-                                    <img 
-                                      src={`data:image/png;base64,${img.data}`} 
-                                      alt={img.title || 'Plot'} 
-                                      style={{ maxWidth: '100%', height: 'auto', borderRadius: '4px' }} 
-                                    />
-                                 </div>
-                               ))}
-                            </div>
-                         </div>
+                        <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed #334155' }}>
+                          <strong style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <ImageIcon size={14} /> GENERATED PLOTS ({execResult.analytics.images.length})
+                          </strong>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {execResult.analytics.images.map((img: any, idx: number) => (
+                              <div key={idx} style={{ background: '#fff', borderRadius: '8px', padding: '12px', textAlign: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
+                                {img.title && <h5 style={{ color: '#1e293b', margin: '0 0 10px 0', fontSize: '13px' }}>{img.title}</h5>}
+                                <img
+                                  src={`data:image/png;base64,${img.data}`}
+                                  alt={img.title || 'Plot'}
+                                  style={{ maxWidth: '100%', height: 'auto', borderRadius: '4px' }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
 
                       {/* NO OUTPUT */}
@@ -412,8 +478,8 @@ if parquet_files:
 
                   {!execResult && !isRunning && !execError && (
                     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', opacity: 0.3 }}>
-                       <Terminal size={48} />
-                       <p style={{ marginTop: '16px', fontSize: '13px' }}>Nhấn Run Code để bắt đầu...</p>
+                      <Terminal size={48} />
+                      <p style={{ marginTop: '16px', fontSize: '13px' }}>Nhấn Run Code để bắt đầu...</p>
                     </div>
                   )}
 
