@@ -17,7 +17,7 @@ export const datasetsApi = {
     page = 1,
     limit = 10
   ): Promise<StandardResponse<PaginatedResponse<DatasetItem>>> => {
-    return apiClient.get('/datasets', { params: { dataset_type, search, page, limit } });
+    return apiClient.get('/datasets', { params: { dataset_type, search, page, page_size: limit } });
   },
 
   // Get Pre-signed URL

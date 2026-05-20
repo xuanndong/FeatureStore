@@ -7,7 +7,7 @@ import { DataSourceCard } from '@/pages/DataSources/DataSourceCard';
 import { useDebounce } from '@/hooks/useDebounce';
 
 
-const DATASOURCES_PAGE_SIZE = 12;
+const DATASOURCES_PAGE_SIZE = 9;
 
 export const DataSourcesPage: React.FC = () => {
   const { showNotification } = useNotification();

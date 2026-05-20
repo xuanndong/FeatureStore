@@ -1,9 +1,18 @@
+# ==========================================================
+# AETHER - SERVICE REQUIREMENTS (PHOTON & TRANSFORMATION)
+# ==========================================================
+
 # --- Core API Framework ---
 fastapi[standard]
 python-dotenv
 python-multipart
 virtualenv
 psutil
+
+# --- Distributed Computing (Ray Client) ---
+# Đồng bộ hoàn toàn phiên bản với hạ tầng cụm Ray Cluster
+ray[default]==2.55.1
+pandas
 
 # --- Database & ORM (Metadata & Tracking) ---
 sqlmodel
@@ -19,15 +28,12 @@ redis
 fsspec
 s3fs
 duckdb
+pyarrow
 
 # --- Protocol ---
 grpcio
 grpcio-tools
 grpcio-reflection
 
-# --- Scheduler ---
-APScheduler
-
 # --- Webhook Callback ---
 httpx
-pyarrow

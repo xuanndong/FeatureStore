@@ -1,83 +1,154 @@
-version: '3.8'
-
 services:
-  # --- Management Cluster (Master Node) ---
-  photon:
-    build:
-      context: .
-      dockerfile: Dockerfile.photon
-    container_name: aether-photon
-    ports:
-      - "8080:8080"
-    env_file:
-      - .env
-    networks:
-      - aether-network
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      minio:
-        condition: service_started
+  # ==========================================================
+  # CORE APPLICATION LAYER
+  # ==========================================================
+  # photon:
+  #   # build:
+  #   #   context: .
+  #   #   dockerfile: Dockerfile.photon
+  #   image: aether-service:latest
+  #   container_name: aether-photon
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   env_file:
+  #     - .env
+  #   command: python -m services.photon.main
+  #   environment:
+  #     - DATABASE_URL=postgresql+asyncpg://xuanndong:04054869@host.docker.internal:5432/FeatureStore
+  #     - REDIS_HOST=host.docker.internal
+  #     - REDIS_URL=redis://host.docker.internal:6379/0
+  #     - MINIO_ENDPOINT=http://host.docker.internal:9000
+  #     - RAY_CLUSTER_ADDRESS=ray://ray-head:10001
+  #     - KAFKA_BOOTSTRAP_SERVERS=host.docker.internal:29092
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   networks:
+  #     - aether-network
 
-  # --- Computing Cluster (Worker Nodes) ---
-  transformation:
-    build:
-      context: .
-      dockerfile: Dockerfile.transformation
-    container_name: aether-transformation
-    env_file:
-      - .env
+  # transformation:
+  #   # build:
+  #   #   context: .
+  #   #   dockerfile: Dockerfile.transformation
+  #   image: aether-service:latest
+  #   container_name: aether-transformation
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   command: python services/transformations/main.py
+  #   environment:
+  #     - DATABASE_URL=postgresql+asyncpg://xuanndong:04054869@host.docker.internal:5432/FeatureStore
+  #     - REDIS_HOST=host.docker.internal
+  #     - REDIS_URL=redis://host.docker.internal:6379/0
+  #     - MINIO_ENDPOINT=http://host.docker.internal:9000
+  #     - RAY_CLUSTER_ADDRESS=ray://ray-head:10001
+  #     - KAFKA_BOOTSTRAP_SERVERS=host.docker.internal:29092
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   networks:
+  #     - aether-network
+
+  # ==========================================================
+  # DISTRIBUTED COMPUTING LAYER (RAY CLUSTER)
+  # ==========================================================
+  ray-head:
+    image: rayproject/ray:2.55.1-py310
+    container_name: aether-ray-head
+    restart: unless-stopped
+    volumes:
+      - ./services/transformations:/app/services/transformations
+      - ~/.cache:/root/.cache
+    ports:
+      - "8265:8265"   # Ray Dashboard UI
+      - "10001:10001" # Port gRPC Client kết nối cụm
+    command: ray start --head --port=6380 --dashboard-host=0.0.0.0 --num-cpus=0 --block
+    shm_size: '2gb'
     networks:
       - aether-network
+
+  ray-worker:
+    image: aether-ray:latest
+    restart: unless-stopped
+    volumes:
+      - ./services/transformations:/app/services/transformations
+      - ~/.cache:/root/.cache
+    command: ray start --address=ray-head:6380 --block
+    shm_size: '2gb'
     deploy:
-      replicas: 1
-
-  # --- Infrastructure Layer ---
-  db:
-    image: postgres:15-alpine
-    container_name: aether-db
-    env_file:
-      - .env
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      retries: 5
+      replicas: 2
     networks:
       - aether-network
 
-  redis:
-    image: redis/redis-stack:latest
-    container_name: aether-redis
-    ports:
-      - "6379:6379"
-      - "8001:8001" # RedisInsight UI
-    networks:
-      - aether-network
+  # ==========================================================
+  # INFRASTRUCTURE & DATA LAYER (COMMENTED FOR LOCAL DEV)
+  # ==========================================================
+  # db:
+  #   image: postgres:15-alpine
+  #   container_name: aether-db
+  #   env_file:
+  #     - .env
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-user} -d $${POSTGRES_DB:-aether_db}"]
+  #     interval: 10s
+  #     retries: 5
+  #   networks:
+  #     - aether-network
 
-  minio:
-    image: minio/minio:latest
-    container_name: aether-minio
-    env_file:
-      - .env
-    ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # Console UI
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-    networks:
-      - aether-network
+  # redis:
+  #   image: redis/redis-stack:latest
+  #   container_name: aether-redis
+  #   ports:
+  #     - "6379:6379"
+  #     - "8001:8001" # RedisInsight UI
+  #   networks:
+  #     - aether-network
+
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: aether-minio
+  #   env_file:
+  #     - .env
+  #   ports:
+  #     - "9000:9000" # S3 API
+  #     - "9001:9001" # Console UI
+  #   command: server /data --console-address ":9001"
+  #   volumes:
+  #     - minio_data:/data
+  #   networks:
+  #     - aether-network
+
+  # kafka:
+  #   image: confluentinc/cp-kafka:7.5.0
+  #   container_name: aether-kafka
+  #   ports:
+  #     - "9092:9092"
+  #     - "29092:29092"
+  #   networks:
+  #     - aether-network
+  #   environment:
+  #     KAFKA_NODE_ID: 1
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+  #     KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092'
+  #     KAFKA_OFFERS_TARGET_LOG_VERSION: '3.5'
+  #     KAFKA_PROCESS_ROLES: 'broker,controller'
+  #     KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+  #     KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:29092'
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+  #     KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+  #     KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+  #     CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
 
 networks:
   aether-network:
+    name: aether-network
     driver: bridge
 
-volumes:
-  postgres_data:
-  minio_data:
+# volumes:
+#   postgres_data:
+#   minio_data:
+
+# (sec) xuandong@xuanndong:~/Documents/Projects/FeatureStore/AetherFS$ docker rm aether-ray-head aether-photon aether-transformation aetherfs-ray-worker-1 aetherfs-ray-worker-2

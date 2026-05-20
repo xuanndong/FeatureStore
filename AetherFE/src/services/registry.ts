@@ -7,7 +7,7 @@ import type {
 export const registryApi = {
   // --- Entities ---
   listEntities: (search?: string, page = 1, limit = 10): Promise<StandardResponse<PaginatedResponse<Entity>>> => {
-    return apiClient.get('/registry/entities', { params: { search, page, limit } });
+    return apiClient.get('/registry/entities', { params: { search, page, page_size: limit } });
   },
   getEntityOptions: (): Promise<StandardResponse<EntityOption[]>> => {
     return apiClient.get('/registry/entities/options');
@@ -18,7 +18,7 @@ export const registryApi = {
 
   // --- Data Sources ---
   listDataSources: (search?: string, page = 1, limit = 10): Promise<StandardResponse<PaginatedResponse<DataSource>>> => {
-    return apiClient.get('/registry/data-sources', { params: { search, page, limit } });
+    return apiClient.get('/registry/data-sources', { params: { search, page, page_size: limit } });
   },
   getSourceOptions: (): Promise<StandardResponse<DataSourceOption[]>> => {
     return apiClient.get('/registry/data-sources/options');

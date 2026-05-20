@@ -1,0 +1,10 @@
+FROM aether-base:latest
+
+# Cài đặt Ray Cluster và các phụ thuộc bổ sung cho Dashboard/Networking
+RUN pip install --no-cache-dir "ray[default]==2.55.1"
+
+# Cấu hình thư mục Cache cố định cho các thư viện ML phổ biến
+ENV HF_HOME=/root/.cache/huggingface
+ENV TORCH_HOME=/root/.cache/torch
+
+WORKDIR /app

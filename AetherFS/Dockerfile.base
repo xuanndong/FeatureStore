@@ -4,30 +4,35 @@ FROM python:3.10-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Tối ưu hóa phân phối luồng CPU cho các Worker tính toán song song
+# Tránh xung đột hiệu năng giữa PyTorch, NumPy, và các Framework điều phối task
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV OPENBLAS_NUM_THREADS=1
+ENV VECLIB_MAXIMUM_THREADS=1
+ENV NUMEXPR_NUM_THREADS=1
+
 WORKDIR /app
 
 # 1. Cài đặt các thư viện hệ thống cần thiết cho Vision, Audio và Video
-# - libgl1 & libglib2.0: Cần cho OpenCV
-# - ffmpeg: Cần cho xử lý Video
-# - libsndfile1: Cần cho xử lý Audio (librosa)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libgl1-mesa-glx \
     libglib2.0-0 \
     ffmpeg \
     libsndfile1 \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Cài đặt các thư viện học máy từ file base.requirements.txt
+# 2. Cài đặt các thư viện học máy
 COPY base.requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
+    # Ép cài đặt PyTorch hệ CPU thông qua index riêng của PyTorch
+    pip install --no-cache-dir torch>=2.0.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+    # Sau đó mới cài đặt các thư viện còn lại trong file requirements
     pip install --no-cache-dir -r base.requirements.txt
 
-# 3. Tải sẵn các tài nguyên ngôn ngữ cơ bản (NLP)
-RUN python -m spacy download en_core_web_sm
+# 3. Tải sẵn các tài nguyên ngôn ngữ cơ bản (NLP Model & Artifacts)
+RUN python -m spacy download en_core_web_sm && \
+    python -m nltk.downloader punkt stopwords averaged_perceptron_tagger
 
 CMD ["python"]
-
-# Run image
-# docker build -t aether-base:latest -f Dockerfile.base .

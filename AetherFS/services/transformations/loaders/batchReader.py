@@ -33,7 +33,14 @@ class BatchReader:
         match source_format:
             case SourceFormat.CSV:
                 return ds.CsvFileFormat(
-                    parse_options=pacsv.ParseOptions(newlines_in_values=True)
+                    parse_options=pacsv.ParseOptions(newlines_in_values=True),
+                    # Use a large block_size so PyArrow reads the file in as few
+                    # fragments as possible. With the default 1MB block, each fragment
+                    # infers types independently — early fragments may infer int64 for
+                    # a column, but later fragments may contain scientific notation
+                    # (e.g. '1e+05') which causes ArrowInvalid on schema unification.
+                    # 256MB covers most real-world CSV files in a single chunk.
+                    read_options=pacsv.ReadOptions(block_size=256 * 1024 * 1024),
                 )
 
             case SourceFormat.PARQUET:

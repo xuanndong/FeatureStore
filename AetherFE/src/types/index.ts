@@ -1,6 +1,6 @@
 export type FeatureGroupStatus = 'ACTIVE' | 'INACTIVE' | 'DEPRECATED';
 export type Materialization = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELED';
-export type ScheduleInterval = 'hourly' | 'daily' | '1_week' | '1_month' | '3_months';
+export type ScheduleInterval = 'HOURLY' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY';
 export type TransformationType = 'SQL' | 'PYTHON_UDF' | 'AGGREGATION';
 export type SourceType = 'BATCH' | 'STREAM';
 export type SourceFormat = 'CSV' | 'PARQUET' | 'AVRO' | 'JSON' | 'IMAGE' | 'TEXT' | 'AUDIO' | 'VIDEO' | 'BINARY';
@@ -25,7 +25,7 @@ export interface StandardResponse<T> {
 }
 
 // --- Entity ---
-export interface EntityOption { 
+export interface EntityOption {
   id: string;
   name: string;
   join_key: string
@@ -100,7 +100,7 @@ export interface FeatureGroupDetail extends FeatureGroup {
 
 
 export interface FeatureGroupUpdate {
-  name?: string; 
+  name?: string;
   status?: FeatureGroupStatus;
   is_scheduled?: boolean;
   cron_expression?: ScheduleInterval;
@@ -174,7 +174,7 @@ export interface FeatureDiscovery {
   id: string;
   name: string;
   data_type: string;
-  group_id: string; 
+  group_id: string;
   group_name: string;
   group_version: string;
   entity_id: string;
@@ -191,7 +191,7 @@ export interface FeatureView {
   endpoint_url: string;
 }
 
-export interface FeatureViewCreate { 
+export interface FeatureViewCreate {
   name: string;
   ttl_seconds: number;
   entity_id: string;

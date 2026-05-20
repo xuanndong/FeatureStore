@@ -71,11 +71,11 @@ export const FinishModal: React.FC<FinishModalProps> = React.memo(({
             <div>
               <label className="form-label">Cron Expression</label>
               <select className="form-select" value={cronExp} onChange={e => onCronExpChange(e.target.value as ScheduleInterval)}>
-                <option value="daily">DAILY</option>
-                <option value="hourly">HOURLY</option>
-                <option value="1_week">WEEKLY</option>
-                <option value="1_month">MONTHLY</option>
-                <option value="3_months">QUARTERLY</option>
+                <option value="HOURLY">HOURLY</option>
+                <option value="DAILY">DAILY</option>
+                <option value="WEEKLY">WEEKLY</option>
+                <option value="MONTHLY">MONTHLY</option>
+                <option value="QUARTERLY">QUARTERLY</option>
               </select>
               <div style={{ color: 'var(--primary)', fontSize: '12px', marginTop: '8px', display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <Info size={14} /> Current Time: {new Date().toLocaleString()}

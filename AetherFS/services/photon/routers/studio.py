@@ -306,7 +306,8 @@ async def create_feature_group(
             connection_options_json=connection_options_json,
             feature_group_id=str(new_fg_id),
             webhook_url=settings.WEBHOOK_URL, # webhook url
-            join_key=join_key
+            join_key=join_key,
+            sync_online=payload.use_online_store
         )
 
         if clean_reqs:

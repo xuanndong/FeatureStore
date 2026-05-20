@@ -1,19 +1,17 @@
-version: '3.8'
-
 services:
   aether-frontend:
+    image: aether-ui:latest
     build:
       context: .
-      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+        - VITE_WS_URL=${VITE_WS_URL}
     container_name: aether-ui
-    env_file:
-      - .env
+    restart: unless-stopped
     ports:
-      - "3000:3000"
-    restart: always
+      - "5173:5173"
     networks:
       - aether-network
-    command: ["nginx", "-g", "daemon off;"]
 
 networks:
   aether-network:

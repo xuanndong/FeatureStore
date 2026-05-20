@@ -35,7 +35,7 @@ export const viewsApi = {
   
   listFeatureViews: (search?: string, page: number = 1, limit: number = 10): Promise<StandardResponse<PaginatedResult<FeatureView>>> => {
     return apiClient.get('/views/feature-views', { 
-      params: { search, page, limit } 
+      params: { search, page, page_size: limit } 
     });
   },
   

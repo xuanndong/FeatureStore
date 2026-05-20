@@ -66,7 +66,7 @@ FROM source_data;`;
   const [fgName, setFgName] = useState('');
   const [useOnlineStore, setUseOnlineStore] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
-  const [cronExp, setCronExp] = useState<ScheduleInterval>('daily');
+  const [cronExp, setCronExp] = useState<ScheduleInterval>('DAILY');
 
   useEffect(() => {
     registryApi.getEntityOptions().then(res => setEntityOptions(res.data)).catch(console.error);

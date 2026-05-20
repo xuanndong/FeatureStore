@@ -152,7 +152,6 @@ class AetherStreamingWorker:
 
     def __init__(self, config: dict, transform_def: str, t_type: TransformationType):
         try:
-            print("DEBUG: Entering AetherStreamingWorker.__init__", flush=True)
             self.config = config
             self.transform_def = transform_def
             self.t_type = t_type
@@ -162,7 +161,6 @@ class AetherStreamingWorker:
             self._thread: threading.Thread | None = None
 
             # StreamReader
-            print("DEBUG: Initializing StreamReader", flush=True)
             from services.transformations.loaders.streamReader import StreamReader
             stream_opts = {
                 'bootstrap_servers': config['kafka_servers'],
@@ -174,7 +172,6 @@ class AetherStreamingWorker:
                 source_format=config.get('source_format')
             )
 
-            print("DEBUG: Initializing OfflineStore", flush=True)
             self.offline_store = OfflineStore()
             self._online_store: OnlineStore | None = None
 
@@ -182,26 +179,20 @@ class AetherStreamingWorker:
             self.engine = None
             self.sql_query: str | None = None
 
-            print(f"DEBUG: has_transformation={config.get('has_transformation')}, t_type={t_type}", flush=True)
             if config.get('has_transformation'):
                 if t_type == TransformationType.SQL:
-                    print("DEBUG: Initializing SQLBased", flush=True)
                     self.engine = SQLBased()
                     self.sql_query = transform_def
 
                 elif t_type == TransformationType.PYTHON_UDF:
-                    print("DEBUG: Finding UDF class name", flush=True)
                     class_name = find_udf_class_name(transform_def)
-                    print(f"DEBUG: Found class name: {class_name}", flush=True)
                     if class_name:
-                        print("DEBUG: Instantiating UDFEngine", flush=True)
                         self.engine = UDFEngine(
                             udf_code=transform_def,
                             class_name=class_name,
                             dataset_name=config['fg_name'],
                             join_key=config.get('join_key'),
                         )
-                        print("DEBUG: UDFEngine instantiated successfully", flush=True)
                     else:
                         logger.error("Could not find UDF class with __call__. Transformation disabled.")
 
@@ -217,11 +208,9 @@ class AetherStreamingWorker:
             self.max_batch_size = 20
             self.flush_interval = 1.0  # seconds
 
-            print(f"DEBUG: Streaming Worker initialized: FG={config['fg_id']}, topic={config['topic_name']}", flush=True)
             logger.info("Streaming Worker initialized: FG=%s, topic=%s", config['fg_id'], config['topic_name'])
         except Exception as e:
             import traceback
-            print("CRITICAL ERROR IN AETHERSTREAMINGWORKER.__INIT__:", flush=True)
             traceback.print_exc()
             raise e
 
@@ -273,7 +262,6 @@ class AetherStreamingWorker:
                     print(f"DEBUG: Error processing microbatch: {e}", flush=True)
                     logger.error("Error processing microbatch: %s", e, exc_info=True)
         except Exception as e:
-            print(f"DEBUG: Streaming loop exited with error: {e}", flush=True)
             logger.error("Streaming loop exited with error: %s", e, exc_info=True)
 
         logger.info("Streaming loop exited cleanly for FG: %s", self.config['fg_id'])
@@ -347,7 +335,6 @@ class AetherStreamingWorker:
         sync_online = self.config.get('sync_online', False)
 
         if output_uri:
-            print(f"DEBUG: Saving data to Offline Store: {output_uri}", flush=True)
             try:
                 self.offline_store.save_pyarrow_table(
                     table=table,

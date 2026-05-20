@@ -23,7 +23,7 @@ export const FeatureGroupDetail: React.FC = () => {
   const [cronExpression, setCronExpression] = useState('');
   const [status, setStatus] = useState<FeatureGroupStatus>('ACTIVE');
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Streaming state
   const [isStreamingLoading, setIsStreamingLoading] = useState(false);
 
@@ -34,14 +34,14 @@ export const FeatureGroupDetail: React.FC = () => {
       try {
         setLoading(true);
         const res = await studioApi.getFeatureGroup(id);
-        
+
         const detail = res.data;
 
         if (isMounted) {
           if (detail) {
             setFeatureGroup(detail);
             setIsScheduled(detail.is_scheduled || false);
-            setCronExpression(detail.cron_expression || 'daily');
+            setCronExpression(detail.cron_expression || 'DAILY');
             setStatus(detail.status);
           } else {
             showNotification('error', 'Không tìm thấy Feature Group');
@@ -123,8 +123,8 @@ export const FeatureGroupDetail: React.FC = () => {
   if (!featureGroup) return null;
 
   return (
-    <div style={{ 
-      display: 'flex', 
+    <div style={{
+      display: 'flex',
       flex: 1,
       height: '100%',
       minHeight: 0,
@@ -132,11 +132,11 @@ export const FeatureGroupDetail: React.FC = () => {
       background: 'var(--bg)',
       overflow: 'hidden'
     }}>
-      
+
       {/* LEFT: Features List (Sidebar) */}
-      <div style={{ 
+      <div style={{
         flex: '0 0 300px',
-        height: '100%', 
+        height: '100%',
         borderRight: '1px solid var(--border)',
         overflowY: 'auto',
         background: 'var(--surface)'
@@ -145,15 +145,15 @@ export const FeatureGroupDetail: React.FC = () => {
       </div>
 
       {/* RIGHT: Main Content */}
-      <div style={{ 
-        flex: 1, 
-        padding: '32px', 
-        display: 'flex', 
+      <div style={{
+        flex: 1,
+        padding: '32px',
+        display: 'flex',
         flexDirection: 'column',
         height: '100%',
         overflowY: 'auto'
       }}>
-        
+
         {/* Header Area */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px', flexShrink: 0 }}>
           <div>
@@ -170,9 +170,9 @@ export const FeatureGroupDetail: React.FC = () => {
 
         {/* Tabs Navigation */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', gap: '32px', flexShrink: 0 }}>
-          <button 
+          <button
             onClick={() => setActiveTab('config')}
-            style={{ 
+            style={{
               background: 'none', border: 'none', padding: '12px 0', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
               color: activeTab === 'config' ? 'var(--primary)' : 'var(--text-secondary)',
               borderBottom: activeTab === 'config' ? '2px solid var(--primary)' : '2px solid transparent',
@@ -180,9 +180,9 @@ export const FeatureGroupDetail: React.FC = () => {
           >
             <Settings size={16} /> Cấu hình & Metadata
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('transformation')}
-            style={{ 
+            style={{
               background: 'none', border: 'none', padding: '12px 0', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
               color: activeTab === 'transformation' ? 'var(--primary)' : 'var(--text-secondary)',
               borderBottom: activeTab === 'transformation' ? '2px solid var(--primary)' : '2px solid transparent',
@@ -191,9 +191,9 @@ export const FeatureGroupDetail: React.FC = () => {
             <Code2 size={16} /> Logic biến đổi (Transformation)
           </button>
           {featureGroup.status === 'ACTIVE' && featureGroup.last_run_status === 'COMPLETED' && (
-            <button 
+            <button
               onClick={() => setActiveTab('streaming')}
-              style={{ 
+              style={{
                 background: 'none', border: 'none', padding: '12px 0', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
                 color: activeTab === 'streaming' ? 'var(--primary)' : 'var(--text-secondary)',
                 borderBottom: activeTab === 'streaming' ? '2px solid var(--primary)' : '2px solid transparent',
@@ -207,7 +207,7 @@ export const FeatureGroupDetail: React.FC = () => {
         {/* TAB CONTENT: CONFIG & METADATA */}
         {activeTab === 'config' && (
           <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div className="card">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
@@ -231,10 +231,10 @@ export const FeatureGroupDetail: React.FC = () => {
                   <div style={{ animation: 'fadeIn 0.3s ease-in-out' }}>
                     <label className="form-label">Chu kỳ chạy</label>
                     <select className="form-select" value={cronExpression} onChange={e => setCronExpression(e.target.value)}>
-                      <option value="daily">Hàng ngày</option>
-                      <option value="hourly">Hàng giờ</option>
-                      <option value="1_week">Hàng tuần</option>
-                      <option value="1_month">Hàng tháng</option>
+                      <option value="HOURLY">Hàng giờ</option>
+                      <option value="DAILY">Hàng ngày</option>
+                      <option value="WEEKLY">Hàng tuần</option>
+                      <option value="MONTHLY">Hàng tháng</option>
                     </select>
                   </div>
                 )}
@@ -281,14 +281,14 @@ export const FeatureGroupDetail: React.FC = () => {
                 <h3 style={{ fontSize: '15px', fontWeight: 600 }}>Mã nguồn logic</h3>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Mã nguồn được liên kết từ Logic Library</p>
               </div>
-              
+
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <span className="badge" style={{ background: 'var(--surface)', padding: '6px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '12px' }}>
                   {featureGroup.transformation?.t_type || 'SQL'}
                 </span>
               </div>
             </div>
-            
+
             <div style={{ flex: 1, border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
               <Editor
                 height="100%"
@@ -309,7 +309,7 @@ export const FeatureGroupDetail: React.FC = () => {
                 <h3 style={{ fontSize: '15px', fontWeight: 600 }}>Streaming Source</h3>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Tiếp nhận dữ liệu thời gian thực thông qua Kafka</p>
               </div>
-              
+
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 {featureGroup.streaming_data ? (
                   <>
@@ -317,13 +317,13 @@ export const FeatureGroupDetail: React.FC = () => {
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'pulse 2s infinite' }}></span>
                       Streaming: Active
                     </span>
-                    <button 
-                      className="btn btn-outline" 
+                    <button
+                      className="btn btn-outline"
                       style={{ color: '#ef4444', borderColor: '#ef4444' }}
                       onClick={handleDisableStreaming}
                       disabled={isStreamingLoading}
                     >
-                      {isStreamingLoading ? <div className="spinner spinner-sm" style={{borderColor: '#ef4444', borderTopColor: 'transparent'}} /> : 'Tắt Streaming'}
+                      {isStreamingLoading ? <div className="spinner spinner-sm" style={{ borderColor: '#ef4444', borderTopColor: 'transparent' }} /> : 'Tắt Streaming'}
                     </button>
                   </>
                 ) : (
@@ -332,8 +332,8 @@ export const FeatureGroupDetail: React.FC = () => {
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--text-secondary)', display: 'inline-block' }}></span>
                       Streaming: Inactive
                     </span>
-                    <button 
-                      className="btn btn-primary" 
+                    <button
+                      className="btn btn-primary"
                       onClick={handleEnableStreaming}
                       disabled={isStreamingLoading}
                     >
@@ -357,7 +357,7 @@ export const FeatureGroupDetail: React.FC = () => {
                 </div>
 
                 <div style={{ flex: 1, position: 'relative', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-                  <button 
+                  <button
                     onClick={() => {
                       const code = `import json\nfrom confluent_kafka import Producer\n\ndef send_streaming_data():\n    # Khởi tạo Kafka Producer kết nối tới hệ thống AetherFS\n    conf = {\n        'bootstrap.servers': '${featureGroup.streaming_data?.bootstrap_servers}',\n        'client.id': 'aether_streaming_producer'\n    }\n    producer = Producer(conf)\n    \n    # Callback để nhận thông báo khi gửi thành công hoặc thất bại\n    def delivery_report(err, msg):\n        if err is not None:\n            print(f"Lỗi khi gửi dữ liệu: {err}")\n        else:\n            print(f"Đã gửi dữ liệu thành công tới Topic {msg.topic()} [Partition {msg.partition()}]")\n\n    try:\n        # Dữ liệu mẫu (Thay thế bằng cấu trúc thực tế của bạn)\n        data = {\n            # Điền các field tương ứng với schema của entity và feature group\n            "id": 1,\n            "feature_value": 100\n        }\n        \n        # Serialize dữ liệu sang JSON byte\n        json_data = json.dumps(data).encode('utf-8')\n        \n        # Gửi dữ liệu vào Topic\n        producer.produce('${featureGroup.streaming_data?.topic_name}', value=json_data, callback=delivery_report)\n        \n        # Đợi các message trong hàng đợi được gửi đi\n        producer.flush()\n    except Exception as e:\n        print(f"Có lỗi xảy ra: {e}")\n\nif __name__ == "__main__":\n    send_streaming_data()`;
                       navigator.clipboard.writeText(code);

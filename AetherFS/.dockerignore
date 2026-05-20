@@ -5,5 +5,32 @@ __pycache__
 .env
 .git
 .gitignore
-anime_dataset/
-*.md
+anime_dataset/# Loại bỏ các file tài liệu ở mọi thư mục
+**/*.md
+
+# Loại bỏ môi trường local và cấu hình git
+.git
+.gitignore
+.env
+.env.example
+
+# Loại bỏ các file test chạy nháp ở thư mục gốc
+test_*.py
+check_kafka.py
+
+# Loại bỏ cache của Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Loại bỏ cấu hình migration của local nếu không muốn mang vào container
+alembic.ini
+alembic/
+
+# Loại bỏ tất cả file markdown và yaml ở mọi thư mục con
+**/*.md
+**/*.yml
+
+# Loại bỏ các Dockerfile khác ở thư mục gốc để tránh xung đột context
+Dockerfile.*

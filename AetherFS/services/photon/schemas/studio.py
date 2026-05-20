@@ -151,10 +151,10 @@ class FeatureGroupUpdate(BaseModel):
     @model_validator(mode='after')
     def validate_schedule(self) -> 'FeatureGroupUpdate':
         # Enabling a schedule requires a cron expression
-        if not self.is_scheduled and not self.cron_expression:
-            raise ValueError("cron_expression' is required when 'is_scheduled' is enabled")
+        if self.is_scheduled is True and not self.cron_expression:
+            raise ValueError("'cron_expression' is required when 'is_scheduled' is enabled")
 
-        if not self.is_scheduled:
+        if self.is_scheduled is False:
             self.cron_expression = None
 
         return self

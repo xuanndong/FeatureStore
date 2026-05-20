@@ -1,4 +1,5 @@
 # Standard Libraries
+import asyncio
 from contextlib import asynccontextmanager
 import logging
 
@@ -11,6 +12,7 @@ import redis.asyncio as aioredis
 # Local Libraries
 from common.config import settings
 from services.photon.routers import view, registry, serving, studio, datasets
+from services.photon.core.scheduler import run_scheduler
 
 # Logs
 logger = logging.getLogger(__name__)
@@ -32,7 +34,19 @@ async def lifespan(app: FastAPI):
         raise
 
     app.state.redis = redis
+    
+    # Start the background scheduler
+    scheduler_task = asyncio.create_task(run_scheduler())
+    
     yield
+    
+    # Shutdown
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
+    
     await app.state.redis.close()
 
 

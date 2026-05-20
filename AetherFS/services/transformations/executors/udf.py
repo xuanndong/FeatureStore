@@ -2,6 +2,7 @@
 import logging
 import os
 import re
+from pathlib import Path
 
 # Third party Libraries
 import ray
@@ -40,18 +41,29 @@ class RayBased:
             return
 
         logger.info("Initializing Ray Engine...")
+
+        current_file = Path(__file__).resolve()
+        project_root = str(current_file.parent.parent.parent.parent)
+
         try:
-            if settings.is_production and settings.RAY_CLUSTER_ADDRESS != "local":
-                logger.info("[PRODUCTION] Connect to Ray Cluster: %s", settings.RAY_CLUSTER_ADDRESS)
-                ray.init(address=settings.RAY_CLUSTER_ADDRESS, ignore_reinit_error=True)
+            if settings.RAY_CLUSTER_ADDRESS != "local" and settings.RAY_CLUSTER_ADDRESS != "":
+                logger.info("[CLUSTER MODE] Connecting to Remote Ray Cluster: %s", settings.RAY_CLUSTER_ADDRESS)
+                ray.init(
+                    address=settings.RAY_CLUSTER_ADDRESS,
+                    ignore_reinit_error=True,
+                    runtime_env={
+                        "working_dir": project_root,
+                        "excludes": [".git", "venv", "__pycache__", "*.parquet", "*.jsonl"],
+                    }
+                )
             else:
-                logger.info("[DEVELOPMENT] Ray Local Engine...")
+                logger.info("[LOCAL MODE] Spawning Embedded Ray Local Engine...")
                 ray.init(
                     num_cpus=RayConfig.NUM_CPUS,
                     num_gpus=RayConfig.NUM_GPUS,
                     object_store_memory=RayConfig.MEMORY_BYTES,
                     ignore_reinit_error=True,
-                    include_dashboard=False
+                    include_dashboard=True
                 )
         except Exception as e:
             logger.error("Failed to initialize Ray Engine: %s", e)
@@ -127,9 +139,6 @@ class RayBased:
 
         remote_args = {RayConfig.RUNTIME_ENV_KEY: {RayConfig.PIP_KEY: requirements}} if requirements else {}
 
-        client = FsspecClient(location_uri, connection_options)
-        fs = client.get_raw_fs()
-
         saved_paths = {}
         offline_store = OfflineStore()
 
@@ -138,23 +147,7 @@ class RayBased:
                 continue
 
             try:
-                file_paths = data.files
-
-                match source_format:
-                    case SourceFormat.CSV:
-                        parse_options = pacsv.ParseOptions(newlines_in_values=True)
-                        ray_dataset = ray.data.read_csv(
-                            file_paths, 
-                            filesystem=fs, 
-                            parse_options=parse_options
-                        )
-                    case SourceFormat.PARQUET:
-                        ray_dataset = ray.data.read_parquet(file_paths, filesystem=fs)
-                    case SourceFormat.JSON:
-                        ray_dataset = ray.data.read_json(file_paths, filesystem=fs)
-                    case _:
-                        logger.warning(f"Fallback to from_arrow for format {source_format}")
-                        ray_dataset = ray.data.from_arrow(data.to_table())
+                ray_dataset = ray.data.from_arrow(data.to_table())
 
                 transformed = ray_dataset.map_batches(
                     UDFEngine,

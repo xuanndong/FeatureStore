@@ -160,13 +160,14 @@ BASE_URI = "${accessInfo.dataset_uri}"
 search_pattern = BASE_URI.replace("s3://", "").rstrip("/") + "/**/*.parquet"
 parquet_files = fs.glob(search_pattern)
 
-    if (!parquet_files):
-        print("Không tìm thấy dữ liệu.")
-    else:
-        dataset = ds.dataset(parquet_files, format="parquet", filesystem=fs)
-        df = dataset.to_table().to_pandas()
-        print(f"Tong so dong: {len(df)}")
-        print(df.head())`;
+if not parquet_files:
+    print("Không tìm thấy dữ liệu.")
+
+print("Đang nạp dữ liệu vào bộ nhớ...")
+dataset = ds.dataset(parquet_files, format="parquet", filesystem=fs)
+df = dataset.to_table().to_pandas()
+print(f"Tong so dong: {len(df)}")
+print(df.head())`;
   };
 
   const generateOnlinePythonSnippet = () => {

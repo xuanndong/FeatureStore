@@ -6,7 +6,7 @@ import type {
 
 export const studioApi = {
   listFeatureGroups: (search?: string, execution_status?: string, page = 1, limit = 10): Promise<StandardResponse<PaginatedResponse<FeatureGroup>>> => {
-    return apiClient.get('/studio/feature-groups', { params: { search, execution_status, page, limit } });
+    return apiClient.get('/studio/feature-groups', { params: { search, execution_status, page, page_size: limit } });
   },
   getFeatureGroup: (id: string): Promise<StandardResponse<FeatureGroupDetail>> => {
     return apiClient.get(`/studio/feature-groups/${id}`);
